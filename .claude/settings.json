@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "aviasales": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "--env-file", "/home/deploy/aviasales-mcp/.env",
+        "aviasales-mcp"
+      ]
+    }
+  }
+}
