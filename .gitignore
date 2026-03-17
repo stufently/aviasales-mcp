@@ -5,6 +5,7 @@
 
 # Claude Code
 .claude/
+.mcp.json
 
 # Python
 __pycache__/
