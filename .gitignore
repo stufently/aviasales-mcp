@@ -3,8 +3,8 @@
 .env.*
 !.env.example
 
-# Claude Code local settings
-.claude/settings.local.json
+# Claude Code
+.claude/
 
 # Python
 __pycache__/
