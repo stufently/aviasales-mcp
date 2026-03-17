@@ -13,13 +13,15 @@ def _build_booking_link(link_fragment: str) -> str:
     if not link_fragment:
         return ""
     partner_id = settings.aviasales_partner_id
-    marker = f"&marker={partner_id}" if partner_id else ""
-    return f"https://www.aviasales.ru{link_fragment}{marker}"
+    if partner_id:
+        sep = "&" if "?" in link_fragment else "?"
+        link_fragment = f"{link_fragment}{sep}marker={partner_id}"
+    return f"https://www.aviasales.ru{link_fragment}"
 
 
-def _format_ticket(t: dict) -> dict:
-    """Enrich a ticket dict with a full booking link."""
-    result = {
+def _format_v3_ticket(t: dict) -> dict:
+    """Format a v3 API ticket response."""
+    return {
         "origin": t.get("origin", ""),
         "destination": t.get("destination", ""),
         "price": t.get("price"),
@@ -34,7 +36,25 @@ def _format_ticket(t: dict) -> dict:
         "expires_at": t.get("expires_at", ""),
         "booking_link": _build_booking_link(t.get("link", "")),
     }
-    return result
+
+
+def _format_v2_ticket(t: dict) -> dict:
+    """Format a v2 API ticket response (different field names)."""
+    return {
+        "origin": t.get("origin", ""),
+        "destination": t.get("destination", ""),
+        "price": t.get("value"),
+        "airline": t.get("gate", ""),
+        "flight_number": None,
+        "departure_at": t.get("depart_date", ""),
+        "return_at": t.get("return_date", ""),
+        "transfers": t.get("number_of_changes", 0),
+        "return_transfers": 0,
+        "duration_to": t.get("duration"),
+        "duration_back": None,
+        "expires_at": "",
+        "booking_link": "",
+    }
 
 
 def _error_response(e: Exception) -> dict:
@@ -85,7 +105,7 @@ async def search_flights(
         tickets = resp.get("data", [])
         return {
             "currency": resp.get("currency", currency),
-            "data": [_format_ticket(t) for t in tickets],
+            "data": [_format_v3_ticket(t) for t in tickets],
         }
     except (ApiError, RateLimitError) as e:
         return _error_response(e)
@@ -128,7 +148,7 @@ async def get_prices_calendar(
         result = {}
         for key, val in raw.items():
             if isinstance(val, dict):
-                result[key] = _format_ticket(val)
+                result[key] = _format_v3_ticket(val)
             else:
                 result[key] = val
         return {"currency": resp.get("currency", currency), "data": result}
@@ -167,31 +187,36 @@ async def get_latest_prices(
         tickets = resp.get("data", [])
         return {
             "currency": resp.get("currency", currency),
-            "data": [_format_ticket(t) for t in tickets],
+            "data": [_format_v3_ticket(t) for t in tickets],
         }
     except (ApiError, RateLimitError) as e:
         return _error_response(e)
 
 
 async def get_popular_directions(
-    origin: str,
+    origin: str | None = None,
+    destination: str | None = None,
     currency: str = "rub",
     locale: str = "ru",
 ) -> dict:
-    """Get popular flight directions from a city.
+    """Get popular flight directions from/to a city.
+
+    The API supports both origin and destination — pass at least one.
 
     Args:
-        origin: Origin IATA code (e.g. "MOW").
+        origin: Origin IATA code (e.g. "MOW"). Optional.
+        destination: Destination IATA code. Optional.
         currency: Price currency (default "rub").
         locale: Locale for city names (default "ru").
 
     Returns:
-        Dict with popular destination data.
+        Dict with popular direction data.
     """
     try:
         resp = await get(
             "/aviasales/v3/get_popular_directions",
             origin=origin,
+            destination=destination,
             currency=currency,
             locale=locale,
         )
@@ -240,7 +265,7 @@ async def get_alternative_directions(
         return {
             "origins": resp.get("origins", []),
             "destinations": resp.get("destinations", []),
-            "data": [_format_ticket(t) for t in prices] if isinstance(prices, list) else prices,
+            "data": [_format_v2_ticket(t) for t in prices] if isinstance(prices, list) else prices,
         }
     except (ApiError, RateLimitError) as e:
         return _error_response(e)

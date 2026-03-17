@@ -41,11 +41,20 @@ async def _request(
     url = f"{BASE_URL}{path}"
 
     for attempt in range(MAX_RETRIES + 1):
-        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
-            resp = await client.request(method, url, params=params, headers=headers)
+        try:
+            async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+                resp = await client.request(method, url, params=params, headers=headers)
+        except httpx.TimeoutException:
+            raise ApiError("Request timed out")
+        except httpx.HTTPError as exc:
+            raise ApiError(f"Connection error: {exc}")
 
         if resp.status_code == 429:
-            retry_after = float(resp.headers.get("Retry-After", RETRY_BACKOFF))
+            raw_retry = resp.headers.get("Retry-After", str(RETRY_BACKOFF))
+            try:
+                retry_after = float(raw_retry)
+            except (ValueError, TypeError):
+                retry_after = RETRY_BACKOFF
             if attempt < MAX_RETRIES:
                 logger.warning(
                     "Rate limited, retrying in %.1fs (attempt %d)", retry_after, attempt + 1
