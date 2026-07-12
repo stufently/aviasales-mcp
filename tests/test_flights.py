@@ -3,6 +3,8 @@ import pytest
 import respx
 
 from aviasales_mcp.tools.flights import (
+    _build_booking_link,
+    _passenger_block,
     get_latest_prices,
     get_popular_directions,
     get_prices_calendar,
@@ -12,38 +14,71 @@ from aviasales_mcp.tools.flights import (
 API_BASE = "https://api.travelpayouts.com"
 
 
-@respx.mock
-@pytest.mark.asyncio
-async def test_search_flights_success():
+def _mock_prices_for_dates(**ticket_overrides):
+    """Install a respx mock for prices_for_dates returning one ticket."""
+    ticket = {
+        "origin": "MOW",
+        "destination": "LED",
+        "price": 3500,
+        "airline": "SU",
+        "flight_number": "SU-100",
+        "departure_at": "2026-04-10T10:00:00Z",
+        "return_at": "2026-04-15T18:00:00Z",
+        "transfers": 0,
+        "return_transfers": 0,
+        "duration_to": 90,
+        "duration_back": 95,
+        "link": "/search/MOWLED1004",
+        "expires_at": "2026-04-01T00:00:00Z",
+    }
+    ticket.update(ticket_overrides)
     respx.get(f"{API_BASE}/aviasales/v3/prices_for_dates").mock(
         return_value=httpx.Response(
             200,
-            json={
-                "success": True,
-                "currency": "rub",
-                "data": [
-                    {
-                        "origin": "MOW",
-                        "destination": "LED",
-                        "price": 3500,
-                        "airline": "SU",
-                        "flight_number": "SU-100",
-                        "departure_at": "2026-04-10T10:00:00Z",
-                        "return_at": "2026-04-15T18:00:00Z",
-                        "transfers": 0,
-                        "return_transfers": 0,
-                        "duration_to": 90,
-                        "duration_back": 95,
-                        "link": "/search/MOWLED1004",
-                        "expires_at": "2026-04-01T00:00:00Z",
-                    }
-                ],
-            },
+            json={"success": True, "currency": "rub", "data": [ticket]},
         )
     )
 
+
+def test_passenger_block_encoding():
+    assert _passenger_block(1, 0, 0, "economy") == "1"
+    assert _passenger_block(2, 0, 0, "economy") == "2"
+    assert _passenger_block(2, 1, 0, "economy") == "21"
+    assert _passenger_block(1, 0, 1, "economy") == "101"
+    assert _passenger_block(3, 2, 1, "business") == "c321"
+    assert _passenger_block(2, 1, 0, "first") == "f21"
+    assert _passenger_block(1, 0, 1, "comfort") == "w101"
+
+
+def test_booking_link_rewrites_passengers_round_trip():
+    link = _build_booking_link("/search/MAD2807BCN26081?t=IB169&search_date=11052023", "2")
+    assert "/search/MAD2807BCN26082?t=IB169" in link
+    assert "marker=12345" in link
+
+
+def test_booking_link_rewrites_passengers_one_way():
+    link = _build_booking_link("/search/MOW1607IST1", "21")
+    assert link.startswith("https://www.aviasales.ru/search/MOW1607IST21")
+
+
+def test_booking_link_default_single_adult_unchanged():
+    link = _build_booking_link("/search/MAD2807BCN26081?t=IB169")
+    assert "/search/MAD2807BCN26081?t=IB169" in link
+
+
+def test_booking_link_unrecognized_fragment_left_intact():
+    link = _build_booking_link("/search/WEIRD-FORMAT", "2")
+    assert "/search/WEIRD-FORMAT" in link
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_search_flights_success():
+    _mock_prices_for_dates()
+
     result = await search_flights("MOW", "LED", departure_at="2026-04")
     assert result["currency"] == "rub"
+    assert result["passengers"] == {"adults": 1, "children": 0, "infants": 0}
     assert len(result["data"]) == 1
     ticket = result["data"][0]
     assert ticket["origin"] == "MOW"
@@ -51,6 +86,16 @@ async def test_search_flights_success():
     assert ticket["price"] == 3500
     assert "aviasales.ru" in ticket["booking_link"]
     assert "12345" in ticket["booking_link"]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_search_flights_two_passengers_in_booking_link():
+    _mock_prices_for_dates(link="/search/MOW1004LED15041?t=SU100")
+
+    result = await search_flights("MOW", "LED", departure_at="2026-04", adults=2)
+    assert result["passengers"]["adults"] == 2
+    assert "/search/MOW1004LED15042?t=SU100" in result["data"][0]["booking_link"]
 
 
 @respx.mock
