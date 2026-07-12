@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-07-12
+
+### Added
+- Passenger parameters for `search_flights`, `get_prices_calendar` and `get_latest_prices`: `adults` (1-9), `children` (0-8), `infants` (0-8) and `trip_class` (economy/comfort/business/first)
+- Passenger party and trip class are encoded into `booking_link`, so the link opens Aviasales with the full party pre-filled
+- `passengers`, `trip_class` and `price_note` fields in tool responses (cached prices are always per adult)
+- Tests for passenger-block encoding and booking-link rewriting (12 tests total)
+
 ## 2026-03-17
 
 ### Added

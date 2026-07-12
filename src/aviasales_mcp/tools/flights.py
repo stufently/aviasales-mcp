@@ -2,16 +2,45 @@
 
 from __future__ import annotations
 
+import re
+
 from aviasales_mcp.api.client import ApiError, RateLimitError, get
 from aviasales_mcp.config import settings
 
-AVIASALES_SEARCH_URL = "https://www.aviasales.ru/search"
+# Trip class letters used in Aviasales search-link passenger blocks.
+_TRIP_CLASS_LETTERS = {"economy": "", "comfort": "w", "business": "c", "first": "f"}
+_CLASS_LETTERS = "".join(letter for letter in _TRIP_CLASS_LETTERS.values() if letter)
+
+# Deep-link path: /search/ + ORIGIN + DDMM + DEST [+ DDMM] + passenger block.
+_SEARCH_LINK_RE = re.compile(
+    rf"^(?P<route>/search/[A-Z]{{3}}\d{{4}}[A-Z]{{3}}(?:\d{{4}})?)"
+    rf"(?:[{_CLASS_LETTERS}]?\d{{1,3}})(?P<query>\?.*)?$"
+)
+
+_PRICE_NOTE = (
+    "Prices are per adult (economy, cached). "
+    "booking_link opens the search for the full party with the actual total."
+)
 
 
-def _build_booking_link(link_fragment: str) -> str:
+def _clamp_party(adults: int, children: int, infants: int) -> tuple[int, int, int]:
+    """Clamp party sizes to what Aviasales search links support."""
+    return max(1, min(adults, 9)), max(0, min(children, 8)), max(0, min(infants, 8))
+
+
+def _passenger_block(adults: int, children: int, infants: int, trip_class: str) -> str:
+    """Encode passengers/class as an Aviasales search-link block (e.g. "2", "c21", "101")."""
+    letter = _TRIP_CLASS_LETTERS.get(trip_class.lower(), "")
+    return letter + f"{adults}{children}{infants}".rstrip("0")
+
+
+def _build_booking_link(link_fragment: str, passenger_block: str = "1") -> str:
     """Build a full Aviasales booking link from a deep-link fragment."""
     if not link_fragment:
         return ""
+    m = _SEARCH_LINK_RE.match(link_fragment)
+    if m:
+        link_fragment = f"{m.group('route')}{passenger_block}{m.group('query') or ''}"
     partner_id = settings.aviasales_partner_id
     if partner_id:
         sep = "&" if "?" in link_fragment else "?"
@@ -19,7 +48,7 @@ def _build_booking_link(link_fragment: str) -> str:
     return f"https://www.aviasales.ru{link_fragment}"
 
 
-def _format_v3_ticket(t: dict) -> dict:
+def _format_v3_ticket(t: dict, passenger_block: str = "1") -> dict:
     """Format a v3 API ticket response."""
     return {
         "origin": t.get("origin", ""),
@@ -34,7 +63,7 @@ def _format_v3_ticket(t: dict) -> dict:
         "duration_to": t.get("duration_to"),
         "duration_back": t.get("duration_back"),
         "expires_at": t.get("expires_at", ""),
-        "booking_link": _build_booking_link(t.get("link", "")),
+        "booking_link": _build_booking_link(t.get("link", ""), passenger_block),
     }
 
 
@@ -71,8 +100,17 @@ async def search_flights(
     currency: str = "rub",
     sorting: str = "price",
     one_way: bool = False,
+    adults: int = 1,
+    children: int = 0,
+    infants: int = 0,
+    trip_class: str = "economy",
 ) -> dict:
     """Search flight prices between two cities.
+
+    Note on passengers: the price data comes from a cache of recent searches and
+    is always PER ADULT in economy. The adults/children/infants/trip_class
+    parameters are encoded into each ticket's booking_link, so the link opens
+    Aviasales with the full party pre-filled and shows the real total price.
 
     Args:
         origin: Origin city IATA code (e.g. "MOW", "LED").
@@ -84,10 +122,17 @@ async def search_flights(
         currency: Price currency code (default "rub").
         sorting: Sort by "price" or "route" (default "price").
         one_way: If True, search one-way tickets only.
+        adults: Number of adult passengers, 1-9 (default 1).
+        children: Number of children 2-11 years, 0-8 (default 0).
+        infants: Number of infants under 2, 0-8 (default 0).
+        trip_class: "economy", "comfort", "business" or "first" (default "economy").
 
     Returns:
-        Dict with "currency", "data" (list of ticket objects with booking links).
+        Dict with "currency", "passengers", "price_note" and "data"
+        (list of ticket objects with booking links for the whole party).
     """
+    adults, children, infants = _clamp_party(adults, children, infants)
+    block = _passenger_block(adults, children, infants, trip_class)
     try:
         resp = await get(
             "/aviasales/v3/prices_for_dates",
@@ -105,7 +150,10 @@ async def search_flights(
         tickets = resp.get("data", [])
         return {
             "currency": resp.get("currency", currency),
-            "data": [_format_v3_ticket(t) for t in tickets],
+            "passengers": {"adults": adults, "children": children, "infants": infants},
+            "trip_class": trip_class,
+            "price_note": _PRICE_NOTE,
+            "data": [_format_v3_ticket(t, block) for t in tickets],
         }
     except (ApiError, RateLimitError) as e:
         return _error_response(e)
@@ -118,10 +166,15 @@ async def get_prices_calendar(
     return_at: str | None = None,
     currency: str = "rub",
     group_by: str = "departure_at",
+    adults: int = 1,
+    children: int = 0,
+    infants: int = 0,
+    trip_class: str = "economy",
 ) -> dict:
     """Get grouped (calendar) prices for a route.
 
-    Useful for finding the cheapest day/month to fly.
+    Useful for finding the cheapest day/month to fly. Prices are per adult
+    (cached); passenger parameters are encoded into each booking_link.
 
     Args:
         origin: Origin IATA code.
@@ -130,10 +183,16 @@ async def get_prices_calendar(
         return_at: Return month (YYYY-MM). Optional.
         currency: Price currency (default "rub").
         group_by: Group results by "departure_at" or "month" (default "departure_at").
+        adults: Number of adult passengers, 1-9 (default 1).
+        children: Number of children 2-11 years, 0-8 (default 0).
+        infants: Number of infants under 2, 0-8 (default 0).
+        trip_class: "economy", "comfort", "business" or "first" (default "economy").
 
     Returns:
         Dict with grouped price data (keyed by date/month).
     """
+    adults, children, infants = _clamp_party(adults, children, infants)
+    block = _passenger_block(adults, children, infants, trip_class)
     try:
         resp = await get(
             "/aviasales/v3/grouped_prices",
@@ -148,10 +207,16 @@ async def get_prices_calendar(
         result = {}
         for key, val in raw.items():
             if isinstance(val, dict):
-                result[key] = _format_v3_ticket(val)
+                result[key] = _format_v3_ticket(val, block)
             else:
                 result[key] = val
-        return {"currency": resp.get("currency", currency), "data": result}
+        return {
+            "currency": resp.get("currency", currency),
+            "passengers": {"adults": adults, "children": children, "infants": infants},
+            "trip_class": trip_class,
+            "price_note": _PRICE_NOTE,
+            "data": result,
+        }
     except (ApiError, RateLimitError) as e:
         return _error_response(e)
 
@@ -162,8 +227,15 @@ async def get_latest_prices(
     limit: int = 20,
     currency: str = "rub",
     one_way: bool = False,
+    adults: int = 1,
+    children: int = 0,
+    infants: int = 0,
+    trip_class: str = "economy",
 ) -> dict:
     """Get the latest (most recently found) flight prices.
+
+    Prices are per adult (cached); passenger parameters are encoded into
+    each booking_link.
 
     Args:
         origin: Origin IATA code. Optional.
@@ -171,10 +243,16 @@ async def get_latest_prices(
         limit: Max results (1-100, default 20).
         currency: Price currency (default "rub").
         one_way: One-way tickets only.
+        adults: Number of adult passengers, 1-9 (default 1).
+        children: Number of children 2-11 years, 0-8 (default 0).
+        infants: Number of infants under 2, 0-8 (default 0).
+        trip_class: "economy", "comfort", "business" or "first" (default "economy").
 
     Returns:
         Dict with "currency" and "data" (list of tickets).
     """
+    adults, children, infants = _clamp_party(adults, children, infants)
+    block = _passenger_block(adults, children, infants, trip_class)
     try:
         resp = await get(
             "/aviasales/v3/get_latest_prices",
@@ -187,7 +265,10 @@ async def get_latest_prices(
         tickets = resp.get("data", [])
         return {
             "currency": resp.get("currency", currency),
-            "data": [_format_v3_ticket(t) for t in tickets],
+            "passengers": {"adults": adults, "children": children, "infants": infants},
+            "trip_class": trip_class,
+            "price_note": _PRICE_NOTE,
+            "data": [_format_v3_ticket(t, block) for t in tickets],
         }
     except (ApiError, RateLimitError) as e:
         return _error_response(e)
