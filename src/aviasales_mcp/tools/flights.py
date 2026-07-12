@@ -48,6 +48,21 @@ def _build_booking_link(link_fragment: str, passenger_block: str = "1") -> str:
     return f"https://www.aviasales.ru{link_fragment}"
 
 
+def _layover_minutes(t: dict) -> int | None:
+    """Total ground time between connecting flights, in minutes.
+
+    The API reports `duration` as full door-to-door travel time and
+    `duration_to`/`duration_back` as pure flight time per direction, so the
+    difference is the combined layover time (both directions for round trips).
+    """
+    total = t.get("duration")
+    flight_to = t.get("duration_to")
+    if total is None or flight_to is None:
+        return None
+    layover = total - flight_to - (t.get("duration_back") or 0)
+    return max(layover, 0)
+
+
 def _format_v3_ticket(t: dict, passenger_block: str = "1") -> dict:
     """Format a v3 API ticket response."""
     return {
@@ -60,8 +75,10 @@ def _format_v3_ticket(t: dict, passenger_block: str = "1") -> dict:
         "return_at": t.get("return_at", ""),
         "transfers": t.get("transfers", 0),
         "return_transfers": t.get("return_transfers", 0),
+        "duration_total": t.get("duration"),
         "duration_to": t.get("duration_to"),
         "duration_back": t.get("duration_back"),
+        "layover_minutes": _layover_minutes(t),
         "expires_at": t.get("expires_at", ""),
         "booking_link": _build_booking_link(t.get("link", ""), passenger_block),
     }
@@ -79,8 +96,10 @@ def _format_v2_ticket(t: dict) -> dict:
         "return_at": t.get("return_date", ""),
         "transfers": t.get("number_of_changes", 0),
         "return_transfers": 0,
+        "duration_total": t.get("duration"),
         "duration_to": t.get("duration"),
         "duration_back": None,
+        "layover_minutes": None,
         "expires_at": "",
         "booking_link": "",
     }
@@ -111,6 +130,11 @@ async def search_flights(
     is always PER ADULT in economy. The adults/children/infants/trip_class
     parameters are encoded into each ticket's booking_link, so the link opens
     Aviasales with the full party pre-filled and shows the real total price.
+
+    Durations: each ticket reports duration_total (full door-to-door travel
+    time), duration_to/duration_back (pure flight time per direction) and
+    layover_minutes (combined ground time between connecting flights; 0 for
+    direct flights). All values are in minutes.
 
     Args:
         origin: Origin city IATA code (e.g. "MOW", "LED").

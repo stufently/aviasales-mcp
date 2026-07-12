@@ -26,6 +26,7 @@ def _mock_prices_for_dates(**ticket_overrides):
         "return_at": "2026-04-15T18:00:00Z",
         "transfers": 0,
         "return_transfers": 0,
+        "duration": 185,
         "duration_to": 90,
         "duration_back": 95,
         "link": "/search/MOWLED1004",
@@ -84,8 +85,33 @@ async def test_search_flights_success():
     assert ticket["origin"] == "MOW"
     assert ticket["destination"] == "LED"
     assert ticket["price"] == 3500
+    assert ticket["duration_total"] == 185
+    assert ticket["layover_minutes"] == 0
     assert "aviasales.ru" in ticket["booking_link"]
     assert "12345" in ticket["booking_link"]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_search_flights_layover_minutes():
+    # Real-world shape: 855 min door-to-door, 675 min in the air, 1 transfer.
+    _mock_prices_for_dates(
+        destination="BKK", duration=855, duration_to=675, duration_back=0, transfers=1
+    )
+
+    result = await search_flights("MOW", "BKK", one_way=True)
+    ticket = result["data"][0]
+    assert ticket["duration_total"] == 855
+    assert ticket["layover_minutes"] == 180
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_search_flights_layover_none_when_duration_missing():
+    _mock_prices_for_dates(duration=None)
+
+    result = await search_flights("MOW", "LED")
+    assert result["data"][0]["layover_minutes"] is None
 
 
 @respx.mock
