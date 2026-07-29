@@ -13,6 +13,16 @@ class Settings(BaseSettings):
     aviasales_partner_id: str = ""
     log_level: str = "INFO"
 
+    # Defaults for every tool call; each one is still overridable per call.
+    aviasales_default_currency: str = "rub"
+    # The price cache is per market: LON-NYC in USD comes back at a different
+    # price for market=ru than for market=us (verified live). Left empty the API
+    # falls back to the ru market, which is wrong for most deployments.
+    aviasales_market: str = ""
+    # Language of the reference datasets (/data/<locale>/cities.json). Only
+    # affects names, not codes.
+    aviasales_locale: str = "en"
+
     # Optional HTTP transport. Left unset the server speaks stdio, which is what
     # local MCP clients expect. Setting a port switches it to streamable-http so
     # it can be reached remotely; PORT is accepted as an alias because most PaaS

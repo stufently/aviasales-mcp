@@ -1,3 +1,5 @@
+import logging
+
 import httpx
 import pytest
 import respx
@@ -158,3 +160,72 @@ async def test_none_params_are_dropped():
 
     await get(PATH, origin="MOW", destination=None)
     assert route.calls[0].request.url.params == httpx.QueryParams(origin="MOW")
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_the_http_client_is_reused_across_calls():
+    # A fresh AsyncClient per request pays a new TLS handshake every time.
+    respx.get(f"{API_BASE}{PATH}").mock(return_value=httpx.Response(200, json=OK))
+
+    await get(PATH)
+    first = client._pooled_client()
+    await get(PATH)
+    assert client._pooled_client() is first
+
+    await client.aclose()
+    assert client._pooled_client() is not first
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_a_closed_client_is_replaced_rather_than_reused():
+    respx.get(f"{API_BASE}{PATH}").mock(return_value=httpx.Response(200, json=OK))
+
+    stale = client._pooled_client()
+    await stale.aclose()
+
+    assert await get(PATH) == OK
+    assert client._pooled_client() is not stale
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_low_quota_is_warned_about(caplog):
+    respx.get(f"{API_BASE}{PATH}").mock(
+        return_value=httpx.Response(
+            200,
+            json=OK,
+            headers={
+                "x-rate-limit": "600",
+                "x-rate-limit-remaining": "12",
+                "x-rate-limit-reset": "13",
+            },
+        )
+    )
+
+    with caplog.at_level(logging.WARNING, logger=client.logger.name):
+        await get(PATH)
+
+    assert "quota nearly spent" in caplog.text
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_healthy_or_garbled_quota_headers_stay_quiet(caplog):
+    respx.get(f"{API_BASE}{PATH}").mock(
+        side_effect=[
+            httpx.Response(
+                200, json=OK, headers={"x-rate-limit": "600", "x-rate-limit-remaining": "590"}
+            ),
+            httpx.Response(
+                200, json=OK, headers={"x-rate-limit": "lots", "x-rate-limit-remaining": "1"}
+            ),
+        ]
+    )
+
+    with caplog.at_level(logging.WARNING, logger=client.logger.name):
+        await get(PATH)
+        await get(PATH)
+
+    assert "quota" not in caplog.text

@@ -2,21 +2,38 @@
 
 MCP server for flight price search via Aviasales / Travelpayouts Data API.
 
+## What you can ask
+
+- "How much is a flight from Moscow to Istanbul in March?"
+- "What's the cheapest day to fly to Bangkok in September?"
+- "Can I save by shifting my trip a couple of days either way?"
+- "Where can I fly cheaply from St Petersburg?"
+- "Anywhere under 30 000 ₽ from Moscow?"
+- "Which airport should I fly into for Pattaya?"
+- "Only evening departures, two adults and a child, business class."
+
+Unlike Google-Flights-scraping MCP servers, place names do not have to be
+guessed into IATA codes by the model: `lookup_cities` and `find_nearest_airports`
+resolve them.
+
 ## Tools
 
 ### Flight prices
 
 | Tool | Description |
 |------|-------------|
-| `search_flights` | Search flight prices between two cities (v3/prices_for_dates) |
-| `get_prices_calendar` | Grouped prices by date — find the cheapest day to fly |
-| `get_latest_prices` | Most recently found flight prices |
-| `get_popular_directions` | Popular destinations from a city |
+| `search_flights` | Prices between two cities on a date or across a month (v3/prices_for_dates) |
+| `get_prices_calendar` | Prices grouped by day or month — the cheapest day to fly |
+| `get_flexible_date_prices` | Prices for the days around your dates — "would shifting a day be cheaper?" |
+| `get_latest_prices` | Most recently found fares, optionally filtered by route |
+| `get_popular_directions` | Where travellers reach a destination **from** |
+| `get_city_directions` | Cheapest destinations reachable **from** a city — inspiration search |
 | `get_alternative_directions` | Prices for nearby airports/cities |
+| `search_by_price_range` | Flights inside a budget; omit the destination to search anywhere (no date filter — the endpoint ignores one) |
 
-`search_flights`, `get_prices_calendar` and `get_latest_prices` accept `adults`
-(1–9), `children` (0–8), `infants` (0–8) and `trip_class`
-(`economy`/`comfort`/`business`/`first`).
+`search_flights`, `get_prices_calendar`, `get_flexible_date_prices` and
+`get_latest_prices` accept `adults` (1–9), `children` (0–8), `infants` (0–8) and
+`trip_class` (`economy`/`comfort`/`business`/`first`).
 
 The Data API serves a cache of recent searches and takes no passenger
 parameters, so the party is encoded into each ticket's `booking_link` instead —
@@ -24,9 +41,15 @@ the link opens Aviasales with the full party and class pre-filled and shows the
 real total. **The prices themselves are always per adult in economy**, which is
 what the `price_note` field in every response spells out for the model.
 
-Tickets also carry `duration_total` (door-to-door minutes), `duration_to` /
+`search_flights` also takes `depart_after` / `depart_before` (`HH:MM`, 24-hour)
+to keep only departures in a time window; set `depart_after` later than
+`depart_before` for a window that wraps midnight (red-eyes).
+
+Tickets carry `duration_total` (door-to-door minutes), `duration_to` /
 `duration_back` (flight time per direction) and `layover_minutes` (combined
-ground time between connections).
+ground time between connections). Every price response also carries a
+`price_summary` (min/median/max) so the model can tell a good fare from a bad one
+without a second search.
 
 ### Reference data
 
@@ -36,12 +59,27 @@ ground time between connections).
 | `lookup_airports` | Airports by name, IATA code, or city code |
 | `lookup_cities` | Cities by name or IATA code — turn a city name into a code |
 | `lookup_countries` | Countries by name or code |
+| `find_nearest_airports` | Airports closest to a place or to lat/lon, by distance |
 
-Each takes `search` and `limit` (default 50, max 500) and returns
-`{total, returned, truncated, data}`. Always pass `search`: the underlying
-datasets are ~10k airports and ~9.6k cities, which is far more than any model
-can hold in context. Each dataset is downloaded once per process and cached for
-24 hours.
+The `lookup_*` tools take `search`, `limit` (default 50, max 500) and `locale`,
+and return `{status, total, returned, truncated, data}`. Always pass `search`:
+the underlying datasets are ~10k airports and ~9.6k cities, which is far more
+than any model can hold in context. Matches are ranked (exact code, then exact
+city code, then name), and airports with no scheduled service sort last. Each
+dataset is downloaded once per process and cached for 24 hours.
+
+`find_nearest_airports` answers the question `lookup_airports` cannot: the
+closest airport is rarely named after the town. It resolves `near="Pattaya"`
+against the cached city and airport datasets and ranks by great-circle distance —
+no third-party geocoder involved.
+
+### Errors and empty results
+
+Every response carries `status` (`"ok"` or `"error"`), so an empty `data` list is
+never confused with a failure. Bad input is refused before the API call, with the
+expected format spelled out (`"departure_at must be \"YYYY-MM-DD\" or
+\"YYYY-MM\"…"`), and both error and empty responses carry a `hint` naming what to
+try next.
 
 ## Setup
 
@@ -60,12 +98,18 @@ docker run --env-file .env aviasales-mcp
 |----------|----------|-------------|
 | `AVIASALES_API_TOKEN` | Yes | Travelpayouts API token |
 | `AVIASALES_PARTNER_ID` | No | Partner ID for booking links |
+| `AVIASALES_DEFAULT_CURRENCY` | No | Default price currency (default: `rub`) |
+| `AVIASALES_MARKET` | No | 2-letter market whose price cache to read (unset → `ru`) |
+| `AVIASALES_LOCALE` | No | Language of reference data names (default: `en`) |
 | `LOG_LEVEL` | No | Logging level (default: INFO) |
 | `MCP_PORT` | No | Serve streamable-HTTP on this port instead of stdio (`PORT` also accepted) |
 | `MCP_HOST` | No | Bind address for HTTP mode (default: `127.0.0.1`; use `0.0.0.0` in Docker) |
 | `MCP_AUTH_TOKEN` | No | Shared secret required on every HTTP request |
 | `MCP_AUTH_ALLOW_QUERY_TOKEN` | No | Also accept the token as `?token=` (default: false) |
 | `MCP_ALLOW_INSECURE_HTTP` | No | Permit a non-loopback bind with no token (default: false) |
+
+`AVIASALES_MARKET` is worth setting: the price cache is per market, and the same
+route in the same currency comes back at a different price for `ru` and `us`.
 
 ## MCP client config
 
@@ -106,6 +150,22 @@ Without `MCP_AUTH_TOKEN` the port is unauthenticated and anyone who reaches it
 can spend your Travelpayouts quota. Loopback binds are allowed (with a warning);
 binding anything else refuses to start unless you also set
 `MCP_ALLOW_INSECURE_HTTP=true`.
+
+## Limitations
+
+- **Prices are a cache of recent searches**, not live availability. A fare can be
+  gone by the time the link opens; `expires_at` says when the quote lapses.
+- **Prices are always per adult in economy.** Passenger count and cabin change
+  the booking link, never the quoted number.
+- **No booking.** This server searches and links out; it never holds or buys.
+- **Cache coverage is uneven.** An empty result means nobody searched that route
+  recently, not that the route does not exist.
+- **`get_latest_prices`, the matrices and nearby airports** come from the older
+  v2 response shape: they name the selling `agency` rather than the airline and
+  carry no flight number.
+- **Rate limits are per endpoint** (600/min for most, 60/min for the week and
+  nearby matrices). The server retries 429s and warns when the published quota
+  runs low.
 
 ## Development
 

@@ -233,6 +233,65 @@ async def test_lookup_airlines():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_exact_code_outranks_a_substring_match():
+    # Dataset order is arbitrary, so slicing the first `limit` substring matches
+    # used to bury the exact hit.
+    _mock_airports(
+        payload=[
+            {"code": "AAA", "name": "Lhr Regional Field", "city_code": "AAA"},
+            {"code": "LHR", "name": "Heathrow", "city_code": "LON"},
+        ]
+    )
+
+    result = await lookup_airports(search="lhr")
+    assert [a["code"] for a in result["data"]] == ["LHR", "AAA"]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_flightable_airports_come_first_within_a_tier():
+    _mock_airports(
+        payload=[
+            {"code": "AA1", "name": "London Disused", "city_code": "LON", "flightable": False},
+            {"code": "AA2", "name": "London City", "city_code": "LON", "flightable": True},
+        ]
+    )
+
+    result = await lookup_airports(search="london")
+    assert [a["code"] for a in result["data"]] == ["AA2", "AA1"]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_locale_selects_a_different_dataset():
+    ru = respx.get(f"{API_BASE}/data/ru/cities.json").mock(
+        return_value=httpx.Response(200, json=[{"code": "BKK", "name": "Бангкок"}])
+    )
+
+    result = await lookup_cities(search="бангкок", locale="ru")
+    assert result["data"][0]["name"] == "Бангкок"
+    assert ru.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_bad_locale_cannot_escape_the_dataset_path():
+    result = await lookup_cities(search="bangkok", locale="../../etc/passwd")
+    assert result["status"] == "error"
+    assert "locale" in result["error"]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_no_match_carries_a_hint():
+    _mock_airports()
+
+    result = await lookup_airports(search="nowhere")
+    assert result["status"] == "ok"
+    assert "hint" in result
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_lookup_countries():
     respx.get(f"{API_BASE}/data/en/countries.json").mock(
         return_value=httpx.Response(

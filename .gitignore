@@ -31,6 +31,10 @@ env/
 .pytest_cache/
 .coverage
 htmlcov/
+.ruff_cache/
+
+# Local scratch (probe scripts, notes) — never part of a commit
+tmp/
 
 # Docker
 .docker/
