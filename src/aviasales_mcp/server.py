@@ -5,7 +5,9 @@ from __future__ import annotations
 import logging
 
 from fastmcp import FastMCP
+from starlette.middleware import Middleware
 
+from aviasales_mcp.auth import TokenAuthMiddleware
 from aviasales_mcp.config import settings
 from aviasales_mcp.tools.flights import (
     get_alternative_directions,
@@ -22,6 +24,8 @@ from aviasales_mcp.tools.reference import (
 )
 
 logging.basicConfig(level=settings.log_level.upper(), format="%(levelname)s %(name)s: %(message)s")
+
+logger = logging.getLogger(__name__)
 
 mcp = FastMCP(
     "Aviasales",
@@ -47,8 +51,49 @@ mcp.tool()(lookup_cities)
 mcp.tool()(lookup_countries)
 
 
+_LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
+
+
 def main() -> None:
-    mcp.run(transport="stdio")
+    port = settings.mcp_port
+    if port is None:
+        mcp.run(transport="stdio")
+        return
+
+    host = settings.mcp_host
+    token = settings.mcp_auth_token
+
+    middleware = None
+    if token:
+        middleware = [
+            Middleware(
+                TokenAuthMiddleware,
+                token=token.get_secret_value(),
+                allow_query_token=settings.mcp_auth_allow_query_token,
+            )
+        ]
+    elif host in _LOOPBACK_HOSTS or settings.mcp_allow_insecure_http:
+        logger.warning(
+            "Serving HTTP on %s:%d without MCP_AUTH_TOKEN — anyone who can reach this "
+            "port can spend your Travelpayouts quota.",
+            host,
+            port,
+        )
+    else:
+        # Binding a public interface with no auth hands the API token to whoever
+        # finds the port, so refuse rather than warn and carry on.
+        raise SystemExit(
+            f"Refusing to serve HTTP on {host}:{port} without MCP_AUTH_TOKEN. "
+            "Set MCP_AUTH_TOKEN, bind MCP_HOST to loopback, or set "
+            "MCP_ALLOW_INSECURE_HTTP=true if this port is genuinely private."
+        )
+
+    mcp.run(
+        transport="streamable-http",
+        host=host,
+        port=port,
+        middleware=middleware,
+    )
 
 
 if __name__ == "__main__":

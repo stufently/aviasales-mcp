@@ -4,6 +4,8 @@ import respx
 
 from aviasales_mcp.tools.flights import (
     _build_booking_link,
+    _clamp_party,
+    _normalize_trip_class,
     _passenger_block,
     get_latest_prices,
     get_popular_directions,
@@ -237,3 +239,74 @@ async def test_get_popular_directions_success():
 
     result = await get_popular_directions("MOW")
     assert "IST" in result["data"]
+
+
+def test_normalize_trip_class():
+    assert _normalize_trip_class("business") == "business"
+    assert _normalize_trip_class("  Business  ") == "business"
+    assert _normalize_trip_class("FIRST") == "first"
+    # Anything the deep link cannot express falls back to economy.
+    assert _normalize_trip_class("premium-platinum") == "economy"
+    assert _normalize_trip_class("") == "economy"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_unsupported_trip_class_is_reported_as_economy():
+    _mock_prices_for_dates(link="/search/MOW1004LED15041")
+
+    result = await search_flights("MOW", "LED", trip_class="premium-platinum")
+    # The echo must match what the booking link actually encodes, not what was asked for.
+    assert result["trip_class"] == "economy"
+    assert "/search/MOW1004LED15041" in result["data"][0]["booking_link"]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_business_class_price_note_warns_prices_are_economy():
+    _mock_prices_for_dates()
+
+    economy = await search_flights("MOW", "LED")
+    assert "NOT" not in economy["price_note"]
+
+    business = await search_flights("MOW", "LED", trip_class="business")
+    assert "business" in business["price_note"]
+    assert "NOT" in business["price_note"]
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_party_sizes_are_clamped():
+    _mock_prices_for_dates(link="/search/MOW1004LED15041")
+
+    result = await search_flights("MOW", "LED", adults=99, children=-3, infants=42)
+    assert result["passengers"] == {"adults": 9, "children": 0, "infants": 8}
+    assert "/search/MOW1004LED1504908" in result["data"][0]["booking_link"]
+
+
+def test_seated_passengers_cannot_exceed_nine():
+    # Aviasales resets /search/MOW2509BKK92 (9 adults + 2 children) to a single
+    # passenger, so the excess has to be trimmed before the link is built.
+    assert _clamp_party(9, 2, 0) == (9, 0, 0)
+    assert _clamp_party(8, 5, 0) == (8, 1, 0)
+    assert _clamp_party(8, 1, 0) == (8, 1, 0)
+    assert _clamp_party(2, 3, 0) == (2, 3, 0)
+
+
+def test_infants_cannot_outnumber_adults():
+    assert _clamp_party(1, 0, 2) == (1, 0, 1)
+    assert _clamp_party(2, 0, 2) == (2, 0, 2)
+    assert _clamp_party(3, 0, 9) == (3, 0, 3)
+
+
+def test_clamped_party_always_encodes_a_valid_block():
+    for adults in range(-2, 12):
+        for children in range(-2, 12):
+            for infants in range(-2, 12):
+                a, c, i = _clamp_party(adults, children, infants)
+                assert 1 <= a <= 9
+                assert 0 <= c <= 8
+                assert 0 <= i <= 8
+                assert a + c <= 9
+                assert i <= a
+                assert _passenger_block(a, c, i, "economy").isdigit()

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from aviasales_mcp.api.client import ApiError, RateLimitError, get
+from aviasales_mcp.api.client import TravelpayoutsError, get
 from aviasales_mcp.config import settings
 
 # Trip class letters used in Aviasales search-link passenger blocks.
@@ -18,19 +18,46 @@ _SEARCH_LINK_RE = re.compile(
 )
 
 _PRICE_NOTE = (
-    "Prices are per adult (economy, cached). "
+    "Prices are per adult in economy (cached). "
     "booking_link opens the search for the full party with the actual total."
 )
 
 
+def _normalize_trip_class(trip_class: str) -> str:
+    """Map a caller-supplied trip class onto a supported one, defaulting to economy."""
+    normalized = trip_class.strip().lower()
+    return normalized if normalized in _TRIP_CLASS_LETTERS else "economy"
+
+
+def _price_note(trip_class: str) -> str:
+    """Explain what the cached prices do and do not cover for this trip class."""
+    if trip_class == "economy":
+        return _PRICE_NOTE
+    return (
+        f"{_PRICE_NOTE} The cache holds economy fares only, so these prices are NOT "
+        f"{trip_class}-class prices — the link opens {trip_class} and will show a higher total."
+    )
+
+
 def _clamp_party(adults: int, children: int, infants: int) -> tuple[int, int, int]:
-    """Clamp party sizes to what Aviasales search links support."""
-    return max(1, min(adults, 9)), max(0, min(children, 8)), max(0, min(infants, 8))
+    """Clamp party sizes to a combination Aviasales search links actually accept.
+
+    Beyond the per-category caps there are two combination rules: seated
+    passengers (adults + children) top out at 9, and there cannot be more lap
+    infants than adults to hold them. A link that breaks either rule is silently
+    reset to a single passenger by Aviasales — verified by rendering
+    ``/search/MOW2509BKK92`` (9 adults + 2 children), which comes back as
+    "1 пассажир" — so trimming here beats handing out a link that lies.
+    """
+    adults = max(1, min(adults, 9))
+    children = max(0, min(children, 8, 9 - adults))
+    infants = max(0, min(infants, 8, adults))
+    return adults, children, infants
 
 
 def _passenger_block(adults: int, children: int, infants: int, trip_class: str) -> str:
     """Encode passengers/class as an Aviasales search-link block (e.g. "2", "c21", "101")."""
-    letter = _TRIP_CLASS_LETTERS.get(trip_class.lower(), "")
+    letter = _TRIP_CLASS_LETTERS.get(_normalize_trip_class(trip_class), "")
     return letter + f"{adults}{children}{infants}".rstrip("0")
 
 
@@ -147,8 +174,10 @@ async def search_flights(
         sorting: Sort by "price" or "route" (default "price").
         one_way: If True, search one-way tickets only.
         adults: Number of adult passengers, 1-9 (default 1).
-        children: Number of children 2-11 years, 0-8 (default 0).
-        infants: Number of infants under 2, 0-8 (default 0).
+        children: Number of children 2-11 years, 0-8 (default 0). Adults plus
+            children cannot exceed 9; the excess is trimmed.
+        infants: Number of infants under 2, 0-8 (default 0). Cannot exceed the
+            number of adults; the excess is trimmed.
         trip_class: "economy", "comfort", "business" or "first" (default "economy").
 
     Returns:
@@ -156,6 +185,7 @@ async def search_flights(
         (list of ticket objects with booking links for the whole party).
     """
     adults, children, infants = _clamp_party(adults, children, infants)
+    trip_class = _normalize_trip_class(trip_class)
     block = _passenger_block(adults, children, infants, trip_class)
     try:
         resp = await get(
@@ -165,7 +195,7 @@ async def search_flights(
             departure_at=departure_at,
             return_at=return_at,
             direct=str(direct).lower() if direct else None,
-            limit=min(limit, 100),
+            limit=max(1, min(limit, 100)),
             currency=currency,
             sorting=sorting,
             one_way=str(one_way).lower() if one_way else None,
@@ -176,10 +206,10 @@ async def search_flights(
             "currency": resp.get("currency", currency),
             "passengers": {"adults": adults, "children": children, "infants": infants},
             "trip_class": trip_class,
-            "price_note": _PRICE_NOTE,
+            "price_note": _price_note(trip_class),
             "data": [_format_v3_ticket(t, block) for t in tickets],
         }
-    except (ApiError, RateLimitError) as e:
+    except TravelpayoutsError as e:
         return _error_response(e)
 
 
@@ -208,14 +238,17 @@ async def get_prices_calendar(
         currency: Price currency (default "rub").
         group_by: Group results by "departure_at" or "month" (default "departure_at").
         adults: Number of adult passengers, 1-9 (default 1).
-        children: Number of children 2-11 years, 0-8 (default 0).
-        infants: Number of infants under 2, 0-8 (default 0).
+        children: Number of children 2-11 years, 0-8 (default 0). Adults plus
+            children cannot exceed 9; the excess is trimmed.
+        infants: Number of infants under 2, 0-8 (default 0). Cannot exceed the
+            number of adults; the excess is trimmed.
         trip_class: "economy", "comfort", "business" or "first" (default "economy").
 
     Returns:
         Dict with grouped price data (keyed by date/month).
     """
     adults, children, infants = _clamp_party(adults, children, infants)
+    trip_class = _normalize_trip_class(trip_class)
     block = _passenger_block(adults, children, infants, trip_class)
     try:
         resp = await get(
@@ -238,10 +271,10 @@ async def get_prices_calendar(
             "currency": resp.get("currency", currency),
             "passengers": {"adults": adults, "children": children, "infants": infants},
             "trip_class": trip_class,
-            "price_note": _PRICE_NOTE,
+            "price_note": _price_note(trip_class),
             "data": result,
         }
-    except (ApiError, RateLimitError) as e:
+    except TravelpayoutsError as e:
         return _error_response(e)
 
 
@@ -268,21 +301,24 @@ async def get_latest_prices(
         currency: Price currency (default "rub").
         one_way: One-way tickets only.
         adults: Number of adult passengers, 1-9 (default 1).
-        children: Number of children 2-11 years, 0-8 (default 0).
-        infants: Number of infants under 2, 0-8 (default 0).
+        children: Number of children 2-11 years, 0-8 (default 0). Adults plus
+            children cannot exceed 9; the excess is trimmed.
+        infants: Number of infants under 2, 0-8 (default 0). Cannot exceed the
+            number of adults; the excess is trimmed.
         trip_class: "economy", "comfort", "business" or "first" (default "economy").
 
     Returns:
         Dict with "currency" and "data" (list of tickets).
     """
     adults, children, infants = _clamp_party(adults, children, infants)
+    trip_class = _normalize_trip_class(trip_class)
     block = _passenger_block(adults, children, infants, trip_class)
     try:
         resp = await get(
             "/aviasales/v3/get_latest_prices",
             origin=origin,
             destination=destination,
-            limit=min(limit, 100),
+            limit=max(1, min(limit, 100)),
             currency=currency,
             one_way=str(one_way).lower() if one_way else None,
         )
@@ -291,10 +327,10 @@ async def get_latest_prices(
             "currency": resp.get("currency", currency),
             "passengers": {"adults": adults, "children": children, "infants": infants},
             "trip_class": trip_class,
-            "price_note": _PRICE_NOTE,
+            "price_note": _price_note(trip_class),
             "data": [_format_v3_ticket(t, block) for t in tickets],
         }
-    except (ApiError, RateLimitError) as e:
+    except TravelpayoutsError as e:
         return _error_response(e)
 
 
@@ -329,7 +365,7 @@ async def get_popular_directions(
             "currency": resp.get("currency", currency),
             "data": resp.get("data", {}),
         }
-    except (ApiError, RateLimitError) as e:
+    except TravelpayoutsError as e:
         return _error_response(e)
 
 
@@ -363,7 +399,7 @@ async def get_alternative_directions(
             destination=destination,
             depart_date=departure_at,
             return_date=return_at,
-            limit=min(limit, 20),
+            limit=max(1, min(limit, 20)),
             currency=currency,
         )
         prices = resp.get("prices", [])
@@ -372,5 +408,5 @@ async def get_alternative_directions(
             "destinations": resp.get("destinations", []),
             "data": [_format_v2_ticket(t) for t in prices] if isinstance(prices, list) else prices,
         }
-    except (ApiError, RateLimitError) as e:
+    except TravelpayoutsError as e:
         return _error_response(e)
