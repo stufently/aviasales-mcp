@@ -612,7 +612,8 @@ async def get_popular_directions(
         locale: 2-letter locale for city names. Defaults to the server's locale.
 
     Returns:
-        Dict with "status", "currency", "destination" (the resolved city) and
+        Dict with "status", "currency", "destination" (the resolved city),
+        "price_note", "price_summary" (min/median/max across the origins) and
         "data" (origin cities with a sample price and dates).
     """
     destination = validation.iata_code(destination, "destination")
@@ -631,6 +632,10 @@ async def get_popular_directions(
         "status": "ok",
         "currency": resp.get("currency", currency),
         "destination": raw.get("destination", {}) if isinstance(raw, dict) else {},
+        # These prices are the same per-adult-economy cache as everywhere else.
+        # Without the note a model can present one as the total for the party.
+        "price_note": _PRICE_NOTE,
+        "price_summary": _price_summary([o for o in origins if isinstance(o, dict)]),
         "data": origins,
     }
     if not origins:
@@ -797,7 +802,9 @@ async def search_by_price_range(
     market = validation.two_letter_code(market, "market", settings.aviasales_market)
     if value_min > value_max:
         raise validation.InvalidArgumentError(
-            f"value_min ({value_min}) cannot exceed value_max ({value_max})."
+            f"value_min ({value_min}) cannot exceed value_max ({value_max}).",
+            f"Swap them: pass value_min={value_max} and value_max={value_min}, or widen the "
+            f"range. Both are prices in the requested currency, not dates.",
         )
 
     resp = await get(
@@ -850,8 +857,9 @@ async def get_alternative_directions(
             server's configured market.
 
     Returns:
-        Dict with "status", "origins", "destinations" and "data" (prices for
-        nearby airport combinations).
+        Dict with "status", "origins", "destinations", "price_note",
+        "price_summary" (min/median/max across the results) and "data" (prices
+        for nearby airport combinations).
     """
     origin = validation.iata_code(origin, "origin")
     destination = validation.iata_code(destination, "destination")
@@ -876,7 +884,13 @@ async def get_alternative_directions(
         "status": "ok",
         "origins": resp.get("origins", []),
         "destinations": resp.get("destinations", []),
+        # Same per-adult-economy cache as the other price tools, so it carries
+        # the same caveat rather than leaving the model to assume a party total.
+        "price_note": _PRICE_NOTE,
         "field_note": _FIELD_NOTE,
+        "price_summary": _price_summary([t for t in data if isinstance(t, dict)])
+        if isinstance(data, list)
+        else None,
         "data": data,
     }
     if not data:

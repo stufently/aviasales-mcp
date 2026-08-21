@@ -152,8 +152,7 @@ The Data API serves a cache of recent searches and takes no passenger
 parameters, so the party is encoded into each ticket's `booking_link` instead —
 the link opens Aviasales with the full party and class pre-filled and shows the
 real total. **The prices themselves are always per adult in economy**, which is
-what the `price_note` field spells out for the model. `get_popular_directions`
-and `get_alternative_directions` are the two that carry no `price_note`.
+what the `price_note` field on every price response spells out for the model.
 
 `search_flights` also takes `depart_after` / `depart_before` (`HH:MM`, 24-hour)
 to keep only departures in a time window; set `depart_after` later than
@@ -161,9 +160,9 @@ to keep only departures in a time window; set `depart_after` later than
 
 Tickets carry `duration_total` (door-to-door minutes), `duration_to` /
 `duration_back` (flight time per direction) and `layover_minutes` (combined
-ground time between connections). Price responses also carry a `price_summary`
-(min/median/max) so the model can tell a good fare from a bad one without a
-second search — again, everywhere except the two directions tools above.
+ground time between connections). Every price response also carries a
+`price_summary` (min/median/max) so the model can tell a good fare from a bad one
+without a second search.
 
 ### Reference data
 
@@ -192,9 +191,9 @@ no third-party geocoder involved.
 Every response carries `status` (`"ok"` or `"error"`), so an empty `data` list is
 never confused with a failure. Bad input is refused before the API call, with the
 expected format spelled out (`"departure_at must be \"YYYY-MM-DD\" or
-\"YYYY-MM\"…"`) — that message is the guidance, so validation errors carry no
-separate `hint`. Empty results and upstream failures do carry a `hint` naming
-what to try next.
+\"YYYY-MM\"…"`), and both error and empty responses carry a `hint` naming what to
+try next. On a rejected argument the hint says what to substitute and which tool
+resolves it — enough for the model to fix the call itself on the second attempt.
 
 ## Setup
 

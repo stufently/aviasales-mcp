@@ -27,6 +27,15 @@ logger = logging.getLogger(__name__)
 # said, so its text must not be echoed into the conversation.
 _INTERNAL_ERROR = "Internal server error — see server logs"
 
+# Used when a validation error carries no hint of its own. A bad argument is the
+# one failure the model can always fix unaided, so it must never come back with
+# an empty hint — and the tool's API-failure hint ("retry, check the codes") is
+# wrong here: nothing was sent and retrying unchanged would fail identically.
+_VALIDATION_HINT = (
+    "The request was rejected before any API call was made, so retrying it unchanged "
+    "will fail the same way. Fix the argument named in the error and call the tool again."
+)
+
 ErrorBuilder = Callable[[str, str | None], dict[str, Any]]
 
 
@@ -44,7 +53,10 @@ def guard(build_error: ErrorBuilder, *, hint: str | None = None):
             try:
                 return await fn(*args, **kwargs)
             except InvalidArgumentError as exc:
-                return build_error(str(exc), None)
+                # The validator's own hint names the fix for this specific
+                # argument; the generic one only covers validators that predate
+                # per-error hints.
+                return build_error(str(exc), exc.hint or _VALIDATION_HINT)
             except TravelpayoutsError as exc:
                 # Covers RateLimitError too: it is not an ApiError.
                 return build_error(str(exc), hint)

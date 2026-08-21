@@ -337,21 +337,40 @@ async def find_nearest_airports(
         first).
     """
     locale = validation.two_letter_code(locale, "locale", settings.aviasales_locale)
-    airports = await _dataset(_dataset_path("airports", locale))
 
-    origin_info: dict[str, Any]
-    if latitude is not None or longitude is not None:
+    # Argument checks come before the dataset download, not after it. Validating
+    # second meant a missing longitude still paid for a multi-megabyte fetch, and
+    # if that fetch failed the caller got an API error instead of the validation
+    # hint that would have fixed the call.
+    use_coordinates = latitude is not None or longitude is not None
+    if use_coordinates:
         if latitude is None or longitude is None:
             raise validation.InvalidArgumentError(
-                "latitude and longitude must be given together, or use near=<place>."
+                "latitude and longitude must be given together, or use near=<place>.",
+                'Supply the missing coordinate, or drop both and pass near="<place name>" '
+                "instead — this tool resolves the name against its own datasets.",
             )
         if not -90 <= latitude <= 90 or not -180 <= longitude <= 180:
             raise validation.InvalidArgumentError(
-                f"latitude must be -90..90 and longitude -180..180, got {latitude}, {longitude}."
+                f"latitude must be -90..90 and longitude -180..180, got {latitude}, {longitude}.",
+                "Check the two are not swapped — latitude is the north/south value and is "
+                "never outside -90..90. Decimal degrees, negative for south and west.",
             )
+    elif not near:
+        raise validation.InvalidArgumentError(
+            'find_nearest_airports needs near="<place>" or latitude+longitude.',
+            'Call it again with near="<place name>" (e.g. near="Pattaya") — that is the '
+            "usual form. Pass latitude and longitude together only when you already have "
+            "coordinates.",
+        )
+
+    airports = await _dataset(_dataset_path("airports", locale))
+
+    origin_info: dict[str, Any]
+    if use_coordinates:
         point = (float(latitude), float(longitude))
         origin_info = {"matched": "coordinates", "coordinates": {"lat": point[0], "lon": point[1]}}
-    elif near:
+    else:
         cities = await _dataset(_dataset_path("cities", locale))
         resolved = _resolve_place(near, cities, airports)
         if resolved is None:
@@ -362,10 +381,6 @@ async def find_nearest_airports(
             )
         point, origin_info = resolved
         origin_info["query"] = near
-    else:
-        raise validation.InvalidArgumentError(
-            'find_nearest_airports needs near="<place>" or latitude+longitude.'
-        )
 
     scored = []
     for airport in airports:

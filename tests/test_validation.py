@@ -83,3 +83,65 @@ def test_one_of_is_case_insensitive():
     assert validation.one_of("PRICE", "sorting", ("price", "route")) == "price"
     with pytest.raises(InvalidArgumentError, match="must be one of"):
         validation.one_of("cheapest", "sorting", ("price", "route"))
+
+
+# --- every validation failure must name the fix, not just the fault ---------
+
+
+def _raise(fn, *args, **kwargs) -> InvalidArgumentError:
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        fn(*args, **kwargs)
+    return excinfo.value
+
+
+def test_every_validator_attaches_a_hint():
+    failures = [
+        _raise(validation.iata_code, None, "origin"),
+        _raise(validation.iata_code, "Moscow", "origin"),
+        _raise(validation.date_or_month, "29.07.2026", "departure_at"),
+        _raise(validation.date_or_month, "2026-13-40", "departure_at"),
+        _raise(validation.full_date, None, "depart_date", required=True),
+        _raise(validation.full_date, "2026-10", "depart_date"),
+        _raise(validation.currency_code, "roubles", "rub"),
+        _raise(validation.two_letter_code, "russian", "locale"),
+        _raise(validation.one_of, "premium", "trip_class", ("economy", "business")),
+        _raise(validation.time_of_day, "6pm", "depart_after"),
+        _raise(validation.time_of_day, "25:70", "depart_after"),
+    ]
+    for exc in failures:
+        assert exc.hint, f"no hint for: {exc}"
+        # The hint is guidance, not a second copy of the complaint.
+        assert exc.hint != str(exc)
+
+
+def test_hint_points_at_the_tool_that_resolves_place_names():
+    assert "lookup_cities" in _raise(validation.iata_code, "Bangkok", "destination").hint
+
+
+def test_month_hint_names_the_tool_that_accepts_a_month():
+    hint = _raise(validation.full_date, "2026-10", "depart_date").hint
+    assert "get_prices_calendar" in hint
+    # It also has to suggest a concrete day inside the month it was given.
+    assert "2026-10-15" in hint
+
+
+def test_enum_hint_lists_the_accepted_values():
+    hint = _raise(validation.one_of, "premium", "trip_class", ("economy", "business")).hint
+    assert '"economy"' in hint and '"business"' in hint
+
+
+def test_hint_is_optional_so_bare_raises_still_work():
+    exc = InvalidArgumentError("something is off")
+    assert exc.hint is None
+    assert str(exc) == "something is off"
+
+
+def test_full_date_hint_never_offers_the_month_form_it_rejects():
+    # full_date delegates to date_or_month, whose hint presents "YYYY-MM" as a
+    # valid option. On an endpoint that rejects a bare month, passing that hint
+    # through would walk the model straight into the next rejection.
+    for bad in ("29.07.2026", "2026-13-40", "next tuesday"):
+        hint = _raise(validation.full_date, bad, "depart_date").hint
+        assert "YYYY-MM-DD" in hint
+        assert "or \"YYYY-MM\"" not in hint
+        assert "get_prices_calendar" in hint

@@ -38,7 +38,17 @@ tests/               respx-mocked; no network, no token needed
   answers a bad code or date with an empty list, which a model reads as "no
   flights on this route".
 - Every response carries `status`; errors and empty results carry a `hint`
-  naming the next tool or parameter to try.
+  naming the next tool or parameter to try. **No error path may return without
+  one.** Validation errors get theirs from `InvalidArgumentError(message, hint)`
+  — the message says what is wrong, the hint says what to send instead and which
+  tool produces it. Raising with a bare message falls back to a generic hint,
+  which is weaker; give new validators a real one.
+- **A price tool's `status: "ok"` response returns `price_note` and
+  `price_summary`.** `price_note` is the only thing telling the model the number
+  is per adult in economy; a response missing it invites a per-adult fare being
+  quoted as the party total. It stays on empty results too — there
+  `price_summary` is `None` and the note is not. Error payloads carry neither:
+  they have no prices to caveat, and their contract is `status`/`error`/`hint`.
 - Tool docstrings are the model's only documentation — they are what ends up in
   the MCP tool schema. Keep the `Args:`/`Returns:` sections accurate, and
   cross-reference sibling tools ("for X use Y instead"). Put bounds and enums in
@@ -63,6 +73,13 @@ docker run --rm -v "$(pwd)":/app -w /app aviasales-mcp-dev ruff check src/ tests
 
 ## Gotchas
 
+- **Schema violations never reach `guard`.** `Literal`/`Field` bounds are
+  enforced by FastMCP from the tool schema, so `trip_class="premium"` over a
+  real MCP client comes back as a JSON-RPC invalid-params error, not as our
+  `{status, error, hint}` payload. That is the intended trade — the bounds
+  belong in the schema — but it means "every error carries a hint" describes
+  errors this code raises, not the ones pydantic rejects first. Calling a tool
+  function directly (as the tests do) bypasses that layer entirely.
 - **`pyproject.toml` declares `license-files`, so `LICENSE` is a build input.**
   The Dockerfile must `COPY` it alongside `pyproject.toml`/`README.md` before
   `pip install .`; leaving it out installs a package with `License-File: None`.

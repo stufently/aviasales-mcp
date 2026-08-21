@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aviasales-mcp"
-version = "0.4.0"
+version = "0.5.0"
 description = "MCP server for Aviasales/Travelpayouts Flight Search API"
 readme = "README.md"
 license = "GPL-3.0-or-later"

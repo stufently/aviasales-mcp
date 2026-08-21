@@ -741,3 +741,121 @@ def test_clamped_party_always_encodes_a_valid_block():
                 assert a + c <= 9
                 assert i <= a
                 assert _passenger_block(a, c, i, "economy").isdigit()
+
+
+# --- price_note / price_summary coverage ------------------------------------
+#
+# `price_note` is what tells the model the quoted number is per adult in
+# economy. Two tools shipped without it, so a model could hand the user a
+# per-adult fare as the total for the whole party. These pin it down.
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_popular_directions_carries_price_note_and_summary():
+    respx.get(f"{API_BASE}/aviasales/v3/get_popular_directions").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "success": True,
+                "currency": "rub",
+                "data": {
+                    "destination": {"city_name": "Bangkok"},
+                    "origin": [
+                        {"city_name": "Phuket", "city_iata": "HKT", "price": 1663},
+                        {"city_name": "Moscow", "city_iata": "MOW", "price": 25000},
+                    ],
+                },
+            },
+        )
+    )
+
+    result = await get_popular_directions("BKK")
+    assert "per adult in economy" in result["price_note"]
+    assert result["price_summary"] == {
+        "min": 1663,
+        "median": 13331.5,
+        "max": 25000,
+        "count": 2,
+    }
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_alternative_directions_carries_price_note_and_summary():
+    respx.get(f"{API_BASE}/v2/prices/nearest-places-matrix").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "origins": ["MOW"],
+                "destinations": ["BKK", "UTP"],
+                "prices": [
+                    {
+                        "origin": "MOW",
+                        "destination": "BKK",
+                        "depart_date": "2026-09-25",
+                        "value": 41000,
+                        "gate": "Biletix",
+                    },
+                    {
+                        "origin": "MOW",
+                        "destination": "UTP",
+                        "depart_date": "2026-09-26",
+                        "value": 39000,
+                        "gate": "Aviakassa",
+                    },
+                ],
+            },
+        )
+    )
+
+    result = await get_alternative_directions("MOW", "BKK")
+    assert "per adult in economy" in result["price_note"]
+    assert result["price_summary"]["min"] == 39000
+    assert result["price_summary"]["max"] == 41000
+    assert result["price_summary"]["count"] == 2
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_price_note_survives_an_empty_result():
+    # An empty cache must not strip the caveat: the model still needs to know
+    # what the numbers would have meant, and price_summary is honestly None.
+    respx.get(f"{API_BASE}/v2/prices/nearest-places-matrix").mock(
+        return_value=httpx.Response(200, json={"origins": [], "destinations": [], "prices": []})
+    )
+
+    result = await get_alternative_directions("MOW", "BKK")
+    assert result["status"] == "ok"
+    assert "per adult in economy" in result["price_note"]
+    assert result["price_summary"] is None
+    assert result["hint"]
+
+
+# --- validation errors must carry an actionable hint ------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("call", "expected_in_hint"),
+    [
+        (lambda: search_flights("Moscow", "BKK"), "lookup_cities"),
+        (lambda: search_flights("MOW", "BKK", departure_at="29.07.2026"), "YYYY-MM-DD"),
+        (lambda: search_flights("MOW", "BKK", currency="roubles"), "ISO 4217"),
+        (lambda: search_flights("MOW", "BKK", trip_class="premium"), "economy"),
+        (lambda: search_flights("MOW", "BKK", depart_after="6pm"), "HH:MM"),
+        (lambda: get_flexible_date_prices("MOW", "BKK", "2026-10"), "get_prices_calendar"),
+        (lambda: search_by_price_range("MOW", value_min=90000, value_max=1000), "value_min"),
+        (lambda: get_popular_directions("Bangkok"), "lookup_cities"),
+        (lambda: get_alternative_directions("MOW", "BK"), "lookup_cities"),
+    ],
+)
+async def test_validation_errors_carry_an_actionable_hint(call, expected_in_hint):
+    result = await call()
+    assert result["status"] == "error"
+    # A model that reads only `hint` on failure used to get nothing back from
+    # the one failure class it can always fix by itself.
+    assert result["hint"], f"no hint on: {result['error']}"
+    assert expected_in_hint in result["hint"]
+    # The API-failure hint would be actively wrong here: nothing was sent.
+    assert "Retry" not in result["hint"]

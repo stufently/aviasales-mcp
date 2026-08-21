@@ -1,5 +1,53 @@
 # Changelog
 
+## 0.5.0 — 2026-08-21
+
+Two defects found during the packaging pass, both in the contract between the
+tools and the model rather than in the API calls.
+
+### Fixed
+- **`get_popular_directions` and `get_alternative_directions` returned no
+  `price_note`.** Every other price tool ships one, and it is the field that
+  says the number is *per adult in economy* — so on these two the model had
+  nothing telling it the fare was not the party total, and could quote a
+  one-adult price as the cost for a family. Both now carry `price_note`, and
+  `price_summary` (min/median/max/count) with it. The note survives an empty
+  result, where `price_summary` is honestly `null`
+- **Validation errors came back without a `hint`.** `guard` passed `None` for
+  `InvalidArgumentError`, so the one failure class a model can always fix
+  unaided was the only one that arrived with no guidance — while the README
+  promised a hint on every error. `InvalidArgumentError` now carries its own
+  `hint`, and every validator sets one that names the substitute and the tool
+  that produces it ("look the name up with `lookup_cities` and retry with the
+  code it returns", "pick a day inside 2026-10, or use `get_prices_calendar`").
+  The generic fallback also states that no API call was made, so an unchanged
+  retry is pointless — the API-failure hint used to imply the opposite
+- **`find_nearest_airports` validated its coordinates after downloading the
+  airport dataset.** A half-given pair (`latitude` with no `longitude`) still
+  paid for a multi-megabyte fetch, and when that fetch failed the caller got an
+  API error instead of the hint naming the actual mistake. Argument checks now
+  run first, which is what the README claimed all along
+- **`full_date` handed back a hint offering the format it rejects.** It
+  delegates to `date_or_month`, whose hint presents `"YYYY-MM"` as a valid
+  option — but the week matrix 400s on a bare month, so a model following that
+  hint walked into the next rejection. The hint is now replaced, not inherited
+
+### Changed
+- Server version 0.4.0 → 0.5.0: response shape and tool docstrings changed, and
+  clients key their tool-definition cache on it
+- Tests 128 → 148. New coverage: `price_note`/`price_summary` on both repaired
+  tools and on an empty result; a parametrized sweep asserting nine different
+  bad arguments each come back with a non-empty, actionable hint; a
+  validator-level check that every failure path attaches a hint distinct from
+  its error message; and `call_count == 0` assertions proving bad coordinates
+  never reach the network
+- README restores the two claims weakened in the packaging commit (`price_note`
+  on every price response, a `hint` on every error) — the code now matches them
+  again. Scope stated precisely: error payloads carry no `price_note`, having no
+  price to caveat, and schema-level rejections (`Literal`/`Field` bounds) are
+  refused by FastMCP before this code runs, so they surface as JSON-RPC errors
+  rather than the `{status, error, hint}` payload. Noted in AGENTS.md
+
 ## 2026-08-21 — packaging and discoverability
 
 Distribution-only pass: no tool, schema or runtime behaviour changed.

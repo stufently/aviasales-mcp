@@ -166,3 +166,46 @@ async def test_airports_without_coordinates_are_ignored_not_crashed_on():
 
     result = await find_nearest_airports(near="Pattaya", limit=10, flightable_only=False)
     assert "NOC" not in {a["code"] for a in result["data"]}
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_bad_coordinates_are_refused_before_the_dataset_is_fetched():
+    # Validating after the download meant a missing longitude still paid for a
+    # multi-megabyte fetch — and if that fetch failed, the caller got an API
+    # error instead of the hint that would have fixed the call.
+    airports = respx.get(f"{API_BASE}/data/en/airports.json").mock(
+        return_value=httpx.Response(200, json=AIRPORTS)
+    )
+    cities = respx.get(f"{API_BASE}/data/en/cities.json").mock(
+        return_value=httpx.Response(200, json=CITIES)
+    )
+
+    bad_calls = (
+        {},
+        {"latitude": 13.0},
+        {"longitude": 100.0},
+        {"latitude": 91.0, "longitude": 0.0},
+    )
+    for kwargs in bad_calls:
+        result = await find_nearest_airports(**kwargs)
+        assert result["status"] == "error", kwargs
+        assert result["hint"], kwargs
+
+    assert airports.call_count == 0
+    assert cities.call_count == 0
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_coordinate_hints_name_the_way_out():
+    _mock_datasets()
+
+    half = await find_nearest_airports(latitude=13.0)
+    assert "near=" in half["hint"]
+
+    swapped = await find_nearest_airports(latitude=100.0, longitude=13.0)
+    assert "swapped" in swapped["hint"]
+
+    neither = await find_nearest_airports()
+    assert "Pattaya" in neither["hint"]
