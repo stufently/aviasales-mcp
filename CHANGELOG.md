@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-08-21 — packaging and discoverability
+
+Distribution-only pass: no tool, schema or runtime behaviour changed.
+
+### Added
+- `[project.urls]` (Homepage, Repository, Issues, Changelog) — a PyPI page with
+  no links back to the repository is a dead end for anyone who lands on it
+- `license-files = ["LICENSE"]`, so the GPL text ships inside the wheel and sdist
+  instead of only living in the repository
+- `py.typed` marker plus the `Typing :: Typed` classifier — the package ships
+  inline type annotations, but without the marker type checkers ignore them in
+  downstream projects
+- `LICENSE` to the Dockerfile's `COPY`: `license-files` makes it a build input,
+  and the image was installing a package with `License-File: None`
+- README: an **Install** section (`uvx` / `pip`), copy-paste MCP client configs
+  for Claude Code, Claude Desktop and Cursor, and a **Common prompts** table
+  mapping plain-language questions to the tools that answer them
+- GitHub repository description and topics, which were both empty
+
+### Changed
+- Classifiers: `Development Status` 3 → 4 (13 tools, 128 tests, 97% coverage is
+  past alpha), plus Environment, Intended Audience, Operating System, Python 3
+  and Topic entries that PyPI facets on
+- Keywords broadened to the terms the package is actually searched by
+  (`mcp-server`, `model-context-protocol`, `flight-search`, `airfare`, `fastmcp`)
+- Dropped the `License :: OSI Approved ::` classifier: PEP 639 deprecates license
+  classifiers alongside the SPDX `license` expression this project already
+  declares, and lets build backends reject the pair — newer ones do
+- README no longer claims `price_note` and `price_summary` on *every* price
+  response (`get_popular_directions` and `get_alternative_directions` carry
+  neither), nor a `hint` on validation errors (there the message itself is the
+  guidance). Wording only — the payloads are unchanged
+
 ## 2026-07-29 — competitor and API-surface audit
 
 Sweep of every Aviasales/Travelpayouts MCP server on GitHub (`wdvr/mcp-kayak`,

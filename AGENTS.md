@@ -18,6 +18,8 @@ src/aviasales_mcp/
   tools/flights.py   price search tools + Aviasales deep-link building
   tools/reference.py airline/airport/city/country lookups, dataset cache,
                      nearest-airport search
+  py.typed           PEP 561 marker; the package ships inline annotations, and
+                     without this file type checkers ignore them downstream
 tests/               respx-mocked; no network, no token needed
 ```
 
@@ -61,6 +63,10 @@ docker run --rm -v "$(pwd)":/app -w /app aviasales-mcp-dev ruff check src/ tests
 
 ## Gotchas
 
+- **`pyproject.toml` declares `license-files`, so `LICENSE` is a build input.**
+  The Dockerfile must `COPY` it alongside `pyproject.toml`/`README.md` before
+  `pip install .`; leaving it out installs a package with `License-File: None`.
+  Same applies to any new file the build reads.
 - **`/aviasales/v3/get_latest_prices` answers in the v2 shape** despite its path:
   `value`/`gate`/`depart_date`/`number_of_changes`, no `link`. Parsing it as v3
   silently produced empty tickets for months. Check a new endpoint's actual rows

@@ -1,20 +1,133 @@
 # aviasales-mcp
 
 MCP server for flight price search via Aviasales / Travelpayouts Data API.
-
-## What you can ask
-
-- "How much is a flight from Moscow to Istanbul in March?"
-- "What's the cheapest day to fly to Bangkok in September?"
-- "Can I save by shifting my trip a couple of days either way?"
-- "Where can I fly cheaply from St Petersburg?"
-- "Anywhere under 30 000 ₽ from Moscow?"
-- "Which airport should I fly into for Pattaya?"
-- "Only evening departures, two adults and a child, business class."
+Thirteen read-only tools that let Claude Code, Claude Desktop, Cursor or any
+other MCP client answer flight-price questions: fares by route and month, the
+cheapest day to fly, flexible dates, budget and inspiration search, plus
+airport/city/airline lookup.
 
 Unlike Google-Flights-scraping MCP servers, place names do not have to be
 guessed into IATA codes by the model: `lookup_cities` and `find_nearest_airports`
 resolve them.
+
+## Common prompts
+
+Ask your agent in plain language — it picks the tool.
+
+| Prompt | Tools it reaches for |
+|--------|----------------------|
+| "How much is a flight from Moscow to Istanbul in March?" | `lookup_cities` → `search_flights` |
+| "What's the cheapest day to fly to Bangkok in September?" | `get_prices_calendar` |
+| "I'm flying Berlin→Lisbon on 12 May, back on the 19th — would shifting a day either way be cheaper?" | `get_flexible_date_prices` |
+| "Where can I fly from St Petersburg for under 30 000 ₽?" | `get_city_directions`, `search_by_price_range` |
+| "Which airport should I fly into for Pattaya, and what does it cost from Dubai?" | `find_nearest_airports` → `search_flights` |
+| "Evening departures only, two adults and a child, business class." | `search_flights` with `depart_after`, `adults`, `children`, `trip_class` |
+
+## Install
+
+You need a free Travelpayouts API token:
+<https://www.travelpayouts.com/programs/100/tools/api>
+
+```bash
+# Run without installing (what MCP client configs below use)
+uvx aviasales-mcp
+
+# Or install into the current environment
+pip install aviasales-mcp
+```
+
+> The PyPI release is still pending. Until it lands, use the Docker invocation
+> in [Setup](#setup) or run from a source checkout with
+> `pip install .` in the repository root.
+
+## MCP client configs
+
+Take the block for your client and put your own token in. `AVIASALES_MARKET` is
+optional but worth setting — see [Configuration](#configuration).
+
+> **Keep the token out of anything you commit.** A project-level `.mcp.json` or
+> `.cursor/mcp.json` is a normal thing to check into git, and a token pasted
+> there goes with it. Prefer the user-level config file, or `.gitignore` the
+> project one. On PyPI-less setups the Docker form reads `--env-file`, which
+> keeps the secret in an ignored `.env`.
+
+### Claude Code
+
+One command, and the token lands in your user config rather than the repo:
+
+```bash
+claude mcp add aviasales --env AVIASALES_API_TOKEN=your-token-here -- uvx aviasales-mcp
+```
+
+Or add it to `~/.claude.json` (every project), or to `.mcp.json` in the project
+root if you are happy to gitignore that file:
+
+```json
+{
+  "mcpServers": {
+    "aviasales": {
+      "command": "uvx",
+      "args": ["aviasales-mcp"],
+      "env": {
+        "AVIASALES_API_TOKEN": "your-token-here",
+        "AVIASALES_MARKET": "ru"
+      }
+    }
+  }
+}
+```
+
+### Claude Desktop
+
+`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS,
+`%APPDATA%\Claude\claude_desktop_config.json` on Windows. A GUI app starts with
+a trimmed `PATH` and often cannot find `uvx` by name — if the server fails to
+start, replace `"uvx"` with its absolute path (`which uvx`):
+
+```json
+{
+  "mcpServers": {
+    "aviasales": {
+      "command": "uvx",
+      "args": ["aviasales-mcp"],
+      "env": {
+        "AVIASALES_API_TOKEN": "your-token-here",
+        "AVIASALES_MARKET": "ru"
+      }
+    }
+  }
+}
+```
+
+### Cursor
+
+`~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (per project):
+
+```json
+{
+  "mcpServers": {
+    "aviasales": {
+      "command": "uvx",
+      "args": ["aviasales-mcp"],
+      "env": {
+        "AVIASALES_API_TOKEN": "your-token-here",
+        "AVIASALES_MARKET": "ru"
+      }
+    }
+  }
+}
+```
+
+### Docker instead of uvx
+
+Works in all three clients — swap the `command`/`args` for:
+
+```json
+{
+  "command": "docker",
+  "args": ["run", "-i", "--rm", "--env-file", "/path/to/.env", "aviasales-mcp"]
+}
+```
 
 ## Tools
 
@@ -39,7 +152,8 @@ The Data API serves a cache of recent searches and takes no passenger
 parameters, so the party is encoded into each ticket's `booking_link` instead —
 the link opens Aviasales with the full party and class pre-filled and shows the
 real total. **The prices themselves are always per adult in economy**, which is
-what the `price_note` field in every response spells out for the model.
+what the `price_note` field spells out for the model. `get_popular_directions`
+and `get_alternative_directions` are the two that carry no `price_note`.
 
 `search_flights` also takes `depart_after` / `depart_before` (`HH:MM`, 24-hour)
 to keep only departures in a time window; set `depart_after` later than
@@ -47,9 +161,9 @@ to keep only departures in a time window; set `depart_after` later than
 
 Tickets carry `duration_total` (door-to-door minutes), `duration_to` /
 `duration_back` (flight time per direction) and `layover_minutes` (combined
-ground time between connections). Every price response also carries a
-`price_summary` (min/median/max) so the model can tell a good fare from a bad one
-without a second search.
+ground time between connections). Price responses also carry a `price_summary`
+(min/median/max) so the model can tell a good fare from a bad one without a
+second search — again, everywhere except the two directions tools above.
 
 ### Reference data
 
@@ -78,10 +192,13 @@ no third-party geocoder involved.
 Every response carries `status` (`"ok"` or `"error"`), so an empty `data` list is
 never confused with a failure. Bad input is refused before the API call, with the
 expected format spelled out (`"departure_at must be \"YYYY-MM-DD\" or
-\"YYYY-MM\"…"`), and both error and empty responses carry a `hint` naming what to
-try next.
+\"YYYY-MM\"…"`) — that message is the guidance, so validation errors carry no
+separate `hint`. Empty results and upstream failures do carry a `hint` naming
+what to try next.
 
 ## Setup
+
+Running it yourself, without `uvx`:
 
 1. Get an API token at https://www.travelpayouts.com/programs/100/tools/api
 2. Copy `.env.example` to `.env` and fill in your token
@@ -110,19 +227,6 @@ docker run --env-file .env aviasales-mcp
 
 `AVIASALES_MARKET` is worth setting: the price cache is per market, and the same
 route in the same currency comes back at a different price for `ru` and `us`.
-
-## MCP client config
-
-```json
-{
-  "mcpServers": {
-    "aviasales": {
-      "command": "docker",
-      "args": ["run", "-i", "--rm", "--env-file", "/path/to/.env", "aviasales-mcp"]
-    }
-  }
-}
-```
 
 ## HTTP transport
 

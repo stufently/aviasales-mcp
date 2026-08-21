@@ -3,9 +3,10 @@
 .env.*
 !.env.example
 
-# Claude Code
+# MCP client configs — they hold the API token
 .claude/
 .mcp.json
+.cursor/
 
 # Python
 __pycache__/

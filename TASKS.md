@@ -2,6 +2,13 @@
 
 ## Active
 
+- [ ] **Publish 0.4.0 to PyPI** (owner — needs the account and an API token).
+      Packaging is done and verified: `python -m build` produces both artifacts
+      and `twine check` passes on each. Remaining steps are all credentialed —
+      claim the `aviasales-mcp` name, `twine upload dist/*` (or a trusted-publisher
+      GitHub Action), then tag `v0.4.0` and cut a GitHub release. Once the package
+      is live, drop the "PyPI release is still pending" note from README's Install
+      section
 - [ ] Real-time search (`/v1/flight_search` + `/v1/flight_search_results`, MD5
       signature, separate product needing approval). This is the only way to drop
       the "prices are a 48h cache" caveat the whole `price_note` machinery exists
@@ -32,3 +39,4 @@
 | 9 | Optional streamable-HTTP transport with token auth | 2026-07-29 |
 | 10 | CI/CD pipeline (GitHub Actions: lint, tests on 3.12/3.13, Docker build) | 2026-07-29 |
 | 11 | Competitor + API-surface audit; fixed latest-prices/popular-directions/agency/market defects, added 4 tools | 2026-07-29 |
+| 12 | PyPI-ready packaging (urls, license-files, py.typed, classifiers), README install + client configs, repo description and topics | 2026-08-21 |
