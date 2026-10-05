@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- Docker base image `python:3.13-slim` → `python:3.14-slim` (3.14.8, Debian 13);
+  CI test matrix gains 3.14, `requires-python >=3.12` unchanged. Verified in
+  Docker on 3.14.8: ruff clean, 148 tests, coverage 96.77%, runtime import OK.
+
 ## 0.5.0 — 2026-08-21
 
 Two defects found during the packaging pass, both in the contract between the
