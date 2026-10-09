@@ -65,13 +65,34 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          if docker manifest inspect "$IMAGE:$VERSION" > /dev/null 2>&1; then
+          # Only a definite "not found" means build. Any other failure (network,
+          # 5xx, auth) stops the run rather than risk overwriting a published tag.
+          if out=$(docker manifest inspect "$IMAGE:$VERSION" 2>&1); then
             echo "$IMAGE:$VERSION already exists; not overwriting it"
+            # A previous run may have died between the two pushes.
+            docker buildx imagetools create -t "$IMAGE:latest" "$IMAGE:$VERSION"
             exit 0
+          fi
+          if ! grep -qiE 'manifest unknown|not found' <<<"$out"; then
+            echo "::error::cannot tell whether $IMAGE:$VERSION exists: $out"
+            exit 1
           fi
           docker build --target runtime -t "$IMAGE:$VERSION" -t "$IMAGE:latest" .
           docker push "$IMAGE:$VERSION"
           docker push "$IMAGE:latest"
+
+      - name: Check the image is publicly pullable
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # The registry fetches the image anonymously to read its label. A GHCR
+          # package that ended up private makes publish fail with a vaguer error;
+          # its visibility can only be changed by the owner in the package settings.
+          docker logout ghcr.io
+          if ! docker manifest inspect "$IMAGE:$VERSION" > /dev/null; then
+            echo "::error::$IMAGE:$VERSION is not anonymously pullable — make the GHCR package public"
+            exit 1
+          fi
 
       - name: Check the registry
         id: listed
