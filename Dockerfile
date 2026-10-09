@@ -19,4 +19,11 @@ COPY tests/ tests/
 
 FROM base AS runtime
 
+# The official MCP registry pulls this label and refuses to list the image unless
+# it matches the `name` in server.json. Change the two together.
+LABEL io.modelcontextprotocol.server.name="io.github.stufently/aviasales-mcp" \
+      org.opencontainers.image.source="https://github.com/stufently/aviasales-mcp" \
+      org.opencontainers.image.description="MCP server for Aviasales/Travelpayouts flight price search" \
+      org.opencontainers.image.licenses="GPL-3.0-or-later"
+
 ENTRYPOINT ["aviasales-mcp"]

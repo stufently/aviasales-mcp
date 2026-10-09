@@ -1,0 +1,102 @@
+name: MCP Registry
+
+# Publishes the runtime image to GHCR and lists it in the official MCP registry
+# (registry.modelcontextprotocol.io) under io.github.stufently/aviasales-mcp.
+#
+# No stored secret is involved: GHCR takes this run's GITHUB_TOKEN, and the
+# registry trusts a short-lived OIDC token minted for this workflow for every
+# name under io.github.stufently/*.
+#
+# Both steps are idempotent per version: an image tag that already exists is
+# never overwritten, and a version the registry already lists is skipped — so a
+# re-run, or a tag pushed after a manual run, does not fail or rewrite history.
+# A new version needs `version` bumped in pyproject.toml and server.json together.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+concurrency:
+  group: registry
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/stufently/aviasales-mcp
+  SERVER_NAME: io.github.stufently/aviasales-mcp
+  PUBLISHER_VERSION: "1.8.1"
+  PUBLISHER_SHA256: "a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check versions agree
+        id: version
+        run: |
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')
+          manifest=$(jq -r '.version' server.json)
+          identifier=$(jq -r '.packages[0].identifier' server.json)
+          label=$(sed -n 's/.*io\.modelcontextprotocol\.server\.name="\([^"]*\)".*/\1/p' Dockerfile)
+          fail=0
+          [ "$manifest" = "$version" ] || { echo "::error::server.json version $manifest != pyproject $version"; fail=1; }
+          [ "$identifier" = "$IMAGE:$version" ] || { echo "::error::server.json identifier $identifier != $IMAGE:$version"; fail=1; }
+          [ "$(jq -r '.name' server.json)" = "$SERVER_NAME" ] || { echo "::error::server.json name is not $SERVER_NAME"; fail=1; }
+          [ "$label" = "$SERVER_NAME" ] || { echo "::error::Dockerfile label '$label' != $SERVER_NAME"; fail=1; }
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match version $version"; fail=1
+          fi
+          [ "$fail" = 0 ]
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image unless the tag exists
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if docker manifest inspect "$IMAGE:$VERSION" > /dev/null 2>&1; then
+            echo "$IMAGE:$VERSION already exists; not overwriting it"
+            exit 0
+          fi
+          docker build --target runtime -t "$IMAGE:$VERSION" -t "$IMAGE:latest" .
+          docker push "$IMAGE:$VERSION"
+          docker push "$IMAGE:latest"
+
+      - name: Check the registry
+        id: listed
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          url="https://registry.modelcontextprotocol.io/v0/servers/${SERVER_NAME/\//%2F}/versions/$VERSION"
+          code=$(curl -sS -o /dev/null -w '%{http_code}' "$url")
+          case "$code" in
+            200) echo "listed=true" >> "$GITHUB_OUTPUT"; echo "$SERVER_NAME $VERSION is already listed" ;;
+            404) echo "listed=false" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::registry answered $code for $url"; exit 1 ;;
+          esac
+
+      - name: Install mcp-publisher
+        if: steps.listed.outputs.listed == 'false'
+        run: |
+          url="https://github.com/modelcontextprotocol/registry/releases/download/v${PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz"
+          curl -fsSL -o publisher.tar.gz "$url"
+          echo "${PUBLISHER_SHA256}  publisher.tar.gz" | sha256sum -c -
+          tar -xzf publisher.tar.gz mcp-publisher
+
+      - name: Publish to the MCP registry
+        if: steps.listed.outputs.listed == 'false'
+        run: |
+          ./mcp-publisher validate server.json
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish server.json

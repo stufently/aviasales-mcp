@@ -1,0 +1,46 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.stufently/aviasales-mcp",
+  "title": "Aviasales Flight Prices",
+  "description": "Flight price search via Aviasales/Travelpayouts: fares by route, cheapest days, flexible dates.",
+  "version": "0.5.0",
+  "websiteUrl": "https://github.com/stufently/aviasales-mcp",
+  "repository": {
+    "url": "https://github.com/stufently/aviasales-mcp",
+    "source": "github",
+    "id": "1184019285"
+  },
+  "packages": [
+    {
+      "registryType": "oci",
+      "identifier": "ghcr.io/stufently/aviasales-mcp:0.5.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "AVIASALES_API_TOKEN",
+          "description": "Travelpayouts API token (https://www.travelpayouts.com/programs/100/tools/api)",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "AVIASALES_MARKET",
+          "description": "2-letter market whose price cache to read; unset falls back to ru",
+          "isRequired": false
+        },
+        {
+          "name": "AVIASALES_DEFAULT_CURRENCY",
+          "description": "Default price currency",
+          "isRequired": false,
+          "default": "rub"
+        },
+        {
+          "name": "AVIASALES_PARTNER_ID",
+          "description": "Travelpayouts partner ID embedded in booking links",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}
