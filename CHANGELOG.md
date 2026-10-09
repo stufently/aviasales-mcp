@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Added
+- **Listed in the official MCP registry** as `io.github.stufently/aviasales-mcp`
+  (`server.json`). The package it points to is the runtime image on GHCR,
+  `ghcr.io/stufently/aviasales-mcp:<version>`, whose
+  `io.modelcontextprotocol.server.name` label the registry checks against the
+  manifest. The new `MCP Registry` workflow (manual run, or a `v*` tag) builds
+  and pushes the image with the run's `GITHUB_TOKEN` and publishes with a
+  short-lived GitHub OIDC token — no stored secret or personal login. It fails
+  if `pyproject.toml`, `server.json` and the Dockerfile label disagree, and it
+  never overwrites an existing image tag or re-publishes a listed version
+- README: one install path that works today — `docker run` of the GHCR image —
+  with ready blocks for Claude Code (`claude mcp add`), Claude Desktop, Cursor,
+  Windsurf, Zed and Codex (`codex mcp add` and `config.toml`). The token is
+  written once, in the client's `env`, and handed to the container by
+  `-e AVIASALES_API_TOKEN`. The `uvx` configs are gone: the PyPI release they
+  depended on has not happened, so every one of them failed to start. A
+  `mcp-name:` marker is in place for when it does
+
 ### Changed
 - Docker base image `python:3.13-slim` → `python:3.14-slim` (3.14.8, Debian 13);
   CI test matrix gains 3.14, `requires-python >=3.12` unchanged. Verified in

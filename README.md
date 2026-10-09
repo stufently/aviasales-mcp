@@ -1,5 +1,7 @@
 # aviasales-mcp
 
+<!-- mcp-name: io.github.stufently/aviasales-mcp -->
+
 MCP server for flight price search via Aviasales / Travelpayouts Data API.
 Thirteen read-only tools that let Claude Code, Claude Desktop, Cursor or any
 other MCP client answer flight-price questions: fares by route and month, the
@@ -25,109 +27,132 @@ Ask your agent in plain language — it picks the tool.
 
 ## Install
 
-You need a free Travelpayouts API token:
-<https://www.travelpayouts.com/programs/100/tools/api>
+You need two things: Docker, and a free Travelpayouts API token from
+<https://www.travelpayouts.com/programs/100/tools/api>.
+
+The server ships as a container image, `ghcr.io/stufently/aviasales-mcp`. Your
+MCP client starts it on demand, so there is nothing to install beyond pasting one
+block below. To check the image starts, send it one `initialize` — it should
+print a JSON reply naming the server, `"name":"Aviasales"`. This does not test
+the token itself; a wrong one surfaces as an error on the first search:
 
 ```bash
-# Run without installing (what MCP client configs below use)
-uvx aviasales-mcp
-
-# Or install into the current environment
-pip install aviasales-mcp
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"check","version":"0"}}}' \
+  | docker run -i --rm -e AVIASALES_API_TOKEN=your-token-here ghcr.io/stufently/aviasales-mcp:latest
 ```
 
-> The PyPI release is still pending. Until it lands, use the Docker invocation
-> in [Setup](#setup) or run from a source checkout with
-> `pip install .` in the repository root.
+`:latest` follows releases; pin a version tag (`:0.5.0`) if you would rather
+upgrade by hand. The package is also PyPI-ready; once it is on PyPI, `uvx
+aviasales-mcp` will work wherever `docker run -i --rm … image` does below.
 
 ## MCP client configs
 
-Take the block for your client and put your own token in. `AVIASALES_MARKET` is
-optional but worth setting — see [Configuration](#configuration).
+Every block runs the same command. `-e AVIASALES_API_TOKEN` with no value hands
+the container the variable the client sets in `env`, so the token is written in
+exactly one place. `AVIASALES_MARKET` is optional but worth setting — see
+[Configuration](#configuration); delete it and its `-e` pair if you do not need it.
 
-> **Keep the token out of anything you commit.** A project-level `.mcp.json` or
-> `.cursor/mcp.json` is a normal thing to check into git, and a token pasted
-> there goes with it. Prefer the user-level config file, or `.gitignore` the
-> project one. On PyPI-less setups the Docker form reads `--env-file`, which
-> keeps the secret in an ignored `.env`.
+> **Keep the token out of anything you commit.** A project-level `.mcp.json`,
+> `.cursor/mcp.json` or `.zed/settings.json` is a normal thing to check into git,
+> and a token pasted there goes with it. Prefer the user-level config file, or
+> `.gitignore` the project one.
 
 ### Claude Code
 
-One command, and the token lands in your user config rather than the repo:
+```bash
+claude mcp add --scope user aviasales -e AVIASALES_API_TOKEN=your-token-here -- \
+  docker run -i --rm -e AVIASALES_API_TOKEN ghcr.io/stufently/aviasales-mcp:latest
+```
+
+`--scope user` makes it available in every project and keeps the token in
+`~/.claude.json`, out of the repository. Check with `claude mcp list`.
+
+### Claude Desktop, Cursor, Windsurf
+
+All three take the same `mcpServers` JSON; only the file differs:
+
+| Client | Config file |
+|--------|-------------|
+| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS), `%APPDATA%\Claude\claude_desktop_config.json` (Windows) |
+| Cursor | `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project) |
+| Windsurf (Devin Desktop) | `~/.codeium/windsurf/mcp_config.json`; newer builds read `~/.config/devin/mcp_config.json` — the MCP settings page opens the right one |
+
+```json
+{
+  "mcpServers": {
+    "aviasales": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "AVIASALES_API_TOKEN",
+        "-e", "AVIASALES_MARKET",
+        "ghcr.io/stufently/aviasales-mcp:latest"
+      ],
+      "env": {
+        "AVIASALES_API_TOKEN": "your-token-here",
+        "AVIASALES_MARKET": "ru"
+      }
+    }
+  }
+}
+```
+
+Claude Desktop starts with a trimmed `PATH` and may not find `docker` by name: if
+the server fails to start, replace `"docker"` with its absolute path
+(`which docker`).
+
+### Zed
+
+`~/.config/zed/settings.json` (or **zed: open settings**):
+
+```json
+{
+  "context_servers": {
+    "aviasales": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "AVIASALES_API_TOKEN",
+        "-e", "AVIASALES_MARKET",
+        "ghcr.io/stufently/aviasales-mcp:latest"
+      ],
+      "env": {
+        "AVIASALES_API_TOKEN": "your-token-here",
+        "AVIASALES_MARKET": "ru"
+      }
+    }
+  }
+}
+```
+
+### Codex
 
 ```bash
-claude mcp add aviasales --env AVIASALES_API_TOKEN=your-token-here -- uvx aviasales-mcp
+codex mcp add aviasales --env AVIASALES_API_TOKEN=your-token-here -- \
+  docker run -i --rm -e AVIASALES_API_TOKEN ghcr.io/stufently/aviasales-mcp:latest
 ```
 
-Or add it to `~/.claude.json` (every project), or to `.mcp.json` in the project
-root if you are happy to gitignore that file:
+Or by hand in `~/.codex/config.toml`:
 
-```json
-{
-  "mcpServers": {
-    "aviasales": {
-      "command": "uvx",
-      "args": ["aviasales-mcp"],
-      "env": {
-        "AVIASALES_API_TOKEN": "your-token-here",
-        "AVIASALES_MARKET": "ru"
-      }
-    }
-  }
-}
+```toml
+[mcp_servers.aviasales]
+command = "docker"
+args = ["run", "-i", "--rm", "-e", "AVIASALES_API_TOKEN", "-e", "AVIASALES_MARKET",
+        "ghcr.io/stufently/aviasales-mcp:latest"]
+
+[mcp_servers.aviasales.env]
+AVIASALES_API_TOKEN = "your-token-here"
+AVIASALES_MARKET = "ru"
 ```
 
-### Claude Desktop
+### Any other stdio client
 
-`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS,
-`%APPDATA%\Claude\claude_desktop_config.json` on Windows. A GUI app starts with
-a trimmed `PATH` and often cannot find `uvx` by name — if the server fails to
-start, replace `"uvx"` with its absolute path (`which uvx`):
-
-```json
-{
-  "mcpServers": {
-    "aviasales": {
-      "command": "uvx",
-      "args": ["aviasales-mcp"],
-      "env": {
-        "AVIASALES_API_TOKEN": "your-token-here",
-        "AVIASALES_MARKET": "ru"
-      }
-    }
-  }
-}
-```
-
-### Cursor
-
-`~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (per project):
-
-```json
-{
-  "mcpServers": {
-    "aviasales": {
-      "command": "uvx",
-      "args": ["aviasales-mcp"],
-      "env": {
-        "AVIASALES_API_TOKEN": "your-token-here",
-        "AVIASALES_MARKET": "ru"
-      }
-    }
-  }
-}
-```
-
-### Docker instead of uvx
-
-Works in all three clients — swap the `command`/`args` for:
-
-```json
-{
-  "command": "docker",
-  "args": ["run", "-i", "--rm", "--env-file", "/path/to/.env", "aviasales-mcp"]
-}
-```
+Command `docker`, arguments
+`run -i --rm -e AVIASALES_API_TOKEN ghcr.io/stufently/aviasales-mcp:latest`, and
+`AVIASALES_API_TOKEN` in the environment the client gives the process. The
+server is also listed in the official MCP registry as
+`io.github.stufently/aviasales-mcp`, which clients with a registry browser can
+install from directly.
 
 ## Tools
 
@@ -197,7 +222,7 @@ resolves it — enough for the model to fix the call itself on the second attemp
 
 ## Setup
 
-Running it yourself, without `uvx`:
+Building the image yourself from a checkout, instead of pulling it:
 
 1. Get an API token at https://www.travelpayouts.com/programs/100/tools/api
 2. Copy `.env.example` to `.env` and fill in your token
@@ -278,7 +303,7 @@ docker run --rm aviasales-mcp-dev pytest -q
 docker run --rm -v "$(pwd)":/app -w /app aviasales-mcp-dev ruff check src/ tests/
 ```
 
-CI runs the suite on Python 3.12 and 3.13 plus a Docker image build — see
+CI runs the suite on Python 3.12, 3.13 and 3.14 plus a Docker image build — see
 `.github/workflows/ci.yml`.
 
 ## License

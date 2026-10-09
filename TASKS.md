@@ -2,13 +2,15 @@
 
 ## Active
 
-- [ ] **Publish 0.5.0 to PyPI** (owner — needs the account and an API token).
-      Packaging is done and verified: `python -m build` produces both artifacts
-      and `twine check` passes on each. Remaining steps are all credentialed —
-      claim the `aviasales-mcp` name, `twine upload dist/*` (or a trusted-publisher
-      GitHub Action), then tag `v0.5.0` and cut a GitHub release. Once the package
-      is live, drop the "PyPI release is still pending" note from README's Install
-      section
+- [ ] **Publish to PyPI** (owner — needs the account and an API token, or a
+      trusted publisher configured on pypi.org). Packaging is done and verified:
+      `python -m build` produces both artifacts and `twine check` passes on each,
+      and README already carries the `mcp-name:` marker the MCP registry checks on
+      PyPI. Remaining steps are all credentialed — claim the `aviasales-mcp` name,
+      `twine upload dist/*` (or a trusted-publisher GitHub Action), then add a
+      `"registryType": "pypi"` package to `server.json` beside the OCI one and
+      re-run the `MCP Registry` workflow with a bumped version. Until then the
+      README's `uvx` mention stays conditional
 - [ ] Real-time search (`/v1/flight_search` + `/v1/flight_search_results`, MD5
       signature, separate product needing approval). This is the only way to drop
       the "prices are a 48h cache" caveat the whole `price_note` machinery exists
@@ -40,3 +42,4 @@
 | 10 | CI/CD pipeline (GitHub Actions: lint, tests on 3.12/3.13, Docker build) | 2026-07-29 |
 | 11 | Competitor + API-surface audit; fixed latest-prices/popular-directions/agency/market defects, added 4 tools | 2026-07-29 |
 | 12 | PyPI-ready packaging (urls, license-files, py.typed, classifiers), README install + client configs, repo description and topics | 2026-08-21 |
+| 13 | GHCR image + listing in the official MCP registry via GitHub OIDC; README install via Docker for Claude Code, Claude Desktop, Cursor, Windsurf, Zed, Codex | 2026-10-09 |
