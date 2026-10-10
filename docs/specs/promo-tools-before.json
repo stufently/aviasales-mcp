@@ -1,0 +1,906 @@
+[
+ {
+  "name": "search_flights",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "origin": {
+     "type": "string",
+     "description": "Origin city IATA code (e.g. \"MOW\", \"LED\")."
+    },
+    "destination": {
+     "type": "string",
+     "description": "Destination city IATA code (e.g. \"IST\", \"BCN\")."
+    },
+    "departure_at": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Departure date or month (YYYY-MM-DD or YYYY-MM). Optional;\na month searches every day in it."
+    },
+    "return_at": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Return date or month (YYYY-MM-DD or YYYY-MM). Optional."
+    },
+    "direct": {
+     "default": false,
+     "type": "boolean",
+     "description": "If True, show only non-stop flights."
+    },
+    "limit": {
+     "default": 10,
+     "maximum": 100,
+     "minimum": 1,
+     "type": "integer",
+     "description": "Max number of results (1-100, default 10)."
+    },
+    "currency": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Price currency code (3 letters, e.g. \"rub\", \"usd\"). Defaults to\nthe server's configured currency."
+    },
+    "market": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "2-letter market whose price cache to read (e.g. \"us\", \"ru\", \"th\").\nThe same route in the same currency is priced differently per market,\nso set this to the traveller's country. Defaults to the server's\nconfigured market."
+    },
+    "one_way": {
+     "default": false,
+     "type": "boolean",
+     "description": "If True, search one-way tickets only."
+    },
+    "adults": {
+     "default": 1,
+     "maximum": 9,
+     "minimum": 1,
+     "type": "integer",
+     "description": "Number of adult passengers, 1-9 (default 1)."
+    },
+    "children": {
+     "default": 0,
+     "maximum": 8,
+     "minimum": 0,
+     "type": "integer",
+     "description": "Number of children 2-11 years, 0-8 (default 0). Adults plus\nchildren cannot exceed 9; the excess is trimmed."
+    },
+    "infants": {
+     "default": 0,
+     "maximum": 8,
+     "minimum": 0,
+     "type": "integer",
+     "description": "Number of infants under 2, 0-8 (default 0). Cannot exceed the\nnumber of adults; the excess is trimmed."
+    },
+    "trip_class": {
+     "default": "economy",
+     "enum": [
+      "economy",
+      "comfort",
+      "business",
+      "first"
+     ],
+     "type": "string",
+     "description": "\"economy\", \"comfort\", \"business\" or \"first\" (default \"economy\")."
+    },
+    "depart_after": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Keep only flights departing at or after this local time\n(\"HH:MM\", 24-hour). Optional."
+    },
+    "depart_before": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Keep only flights departing at or before this local time\n(\"HH:MM\", 24-hour). Optional. Combined with depart_after and set\nearlier than it, the window wraps midnight (e.g. 22:00-06:00)."
+    }
+   },
+   "required": [
+    "origin",
+    "destination"
+   ],
+   "type": "object"
+  }
+ },
+ {
+  "name": "get_prices_calendar",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "origin": {
+     "type": "string",
+     "description": "Origin IATA code."
+    },
+    "destination": {
+     "type": "string",
+     "description": "Destination IATA code."
+    },
+    "departure_at": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Departure month (YYYY-MM). Optional."
+    },
+    "return_at": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Return month (YYYY-MM). Optional."
+    },
+    "currency": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Price currency (3 letters). Defaults to the server's currency."
+    },
+    "market": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "2-letter market whose price cache to read (e.g. \"us\", \"ru\").\nDefaults to the server's configured market."
+    },
+    "group_by": {
+     "default": "departure_at",
+     "enum": [
+      "departure_at",
+      "month"
+     ],
+     "type": "string",
+     "description": "Group results by \"departure_at\" or \"month\" (default \"departure_at\")."
+    },
+    "adults": {
+     "default": 1,
+     "maximum": 9,
+     "minimum": 1,
+     "type": "integer",
+     "description": "Number of adult passengers, 1-9 (default 1)."
+    },
+    "children": {
+     "default": 0,
+     "maximum": 8,
+     "minimum": 0,
+     "type": "integer",
+     "description": "Number of children 2-11 years, 0-8 (default 0). Adults plus\nchildren cannot exceed 9; the excess is trimmed."
+    },
+    "infants": {
+     "default": 0,
+     "maximum": 8,
+     "minimum": 0,
+     "type": "integer",
+     "description": "Number of infants under 2, 0-8 (default 0). Cannot exceed the\nnumber of adults; the excess is trimmed."
+    },
+    "trip_class": {
+     "default": "economy",
+     "enum": [
+      "economy",
+      "comfort",
+      "business",
+      "first"
+     ],
+     "type": "string",
+     "description": "\"economy\", \"comfort\", \"business\" or \"first\" (default \"economy\")."
+    }
+   },
+   "required": [
+    "origin",
+    "destination"
+   ],
+   "type": "object"
+  }
+ },
+ {
+  "name": "get_flexible_date_prices",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "origin": {
+     "type": "string",
+     "description": "Origin IATA code."
+    },
+    "destination": {
+     "type": "string",
+     "description": "Destination IATA code."
+    },
+    "depart_date": {
+     "type": "string",
+     "description": "Intended departure date (YYYY-MM-DD). Required."
+    },
+    "return_date": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Intended return date (YYYY-MM-DD). Omit for one-way."
+    },
+    "currency": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Price currency (3 letters). Defaults to the server's currency."
+    },
+    "market": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "2-letter market whose price cache to read. Defaults to the\nserver's configured market."
+    },
+    "adults": {
+     "default": 1,
+     "maximum": 9,
+     "minimum": 1,
+     "type": "integer",
+     "description": "Number of adult passengers, 1-9 (default 1)."
+    },
+    "children": {
+     "default": 0,
+     "maximum": 8,
+     "minimum": 0,
+     "type": "integer",
+     "description": "Number of children 2-11 years, 0-8 (default 0)."
+    },
+    "infants": {
+     "default": 0,
+     "maximum": 8,
+     "minimum": 0,
+     "type": "integer",
+     "description": "Number of infants under 2, 0-8 (default 0)."
+    },
+    "trip_class": {
+     "default": "economy",
+     "enum": [
+      "economy",
+      "comfort",
+      "business",
+      "first"
+     ],
+     "type": "string",
+     "description": "\"economy\", \"comfort\", \"business\" or \"first\" (default \"economy\")."
+    }
+   },
+   "required": [
+    "origin",
+    "destination",
+    "depart_date"
+   ],
+   "type": "object"
+  }
+ },
+ {
+  "name": "get_latest_prices",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "origin": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Origin IATA code. Optional."
+    },
+    "destination": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Destination IATA code. Optional."
+    },
+    "limit": {
+     "default": 20,
+     "maximum": 100,
+     "minimum": 1,
+     "type": "integer",
+     "description": "Max results (1-100, default 20)."
+    },
+    "currency": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Price currency (3 letters). Defaults to the server's currency."
+    },
+    "market": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "2-letter market whose price cache to read. Defaults to the\nserver's configured market."
+    },
+    "one_way": {
+     "default": false,
+     "type": "boolean",
+     "description": "One-way tickets only."
+    },
+    "adults": {
+     "default": 1,
+     "maximum": 9,
+     "minimum": 1,
+     "type": "integer",
+     "description": "Number of adult passengers, 1-9 (default 1)."
+    },
+    "children": {
+     "default": 0,
+     "maximum": 8,
+     "minimum": 0,
+     "type": "integer",
+     "description": "Number of children 2-11 years, 0-8 (default 0). Adults plus\nchildren cannot exceed 9; the excess is trimmed."
+    },
+    "infants": {
+     "default": 0,
+     "maximum": 8,
+     "minimum": 0,
+     "type": "integer",
+     "description": "Number of infants under 2, 0-8 (default 0). Cannot exceed the\nnumber of adults; the excess is trimmed."
+    },
+    "trip_class": {
+     "default": "economy",
+     "enum": [
+      "economy",
+      "comfort",
+      "business",
+      "first"
+     ],
+     "type": "string",
+     "description": "\"economy\", \"comfort\", \"business\" or \"first\" (default \"economy\")."
+    }
+   },
+   "type": "object"
+  }
+ },
+ {
+  "name": "get_popular_directions",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "destination": {
+     "type": "string",
+     "description": "Destination IATA code (e.g. \"BKK\"). Required — the API\nrejects a request without it."
+    },
+    "currency": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Price currency (3 letters). Defaults to the server's currency."
+    },
+    "locale": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "2-letter locale for city names. Defaults to the server's locale."
+    }
+   },
+   "required": [
+    "destination"
+   ],
+   "type": "object"
+  }
+ },
+ {
+  "name": "get_city_directions",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "origin": {
+     "type": "string",
+     "description": "Origin city IATA code (e.g. \"MOW\"). Use `lookup_cities` to\nresolve a city name first."
+    },
+    "currency": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Price currency (3 letters). Defaults to the server's currency."
+    }
+   },
+   "required": [
+    "origin"
+   ],
+   "type": "object"
+  }
+ },
+ {
+  "name": "get_alternative_directions",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "origin": {
+     "type": "string",
+     "description": "Origin IATA code."
+    },
+    "destination": {
+     "type": "string",
+     "description": "Destination IATA code."
+    },
+    "departure_at": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Departure date (YYYY-MM-DD or YYYY-MM). Optional."
+    },
+    "return_at": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Return date (YYYY-MM-DD or YYYY-MM). Optional."
+    },
+    "limit": {
+     "default": 10,
+     "maximum": 20,
+     "minimum": 1,
+     "type": "integer",
+     "description": "Max results (1-20, default 10)."
+    },
+    "currency": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Price currency (3 letters). Defaults to the server's currency."
+    },
+    "market": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "2-letter market whose price cache to read. Defaults to the\nserver's configured market."
+    }
+   },
+   "required": [
+    "origin",
+    "destination"
+   ],
+   "type": "object"
+  }
+ },
+ {
+  "name": "search_by_price_range",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "origin": {
+     "type": "string",
+     "description": "Origin IATA code."
+    },
+    "value_min": {
+     "minimum": 0,
+     "type": "integer",
+     "description": "Lowest acceptable price, in `currency`."
+    },
+    "value_max": {
+     "minimum": 0,
+     "type": "integer",
+     "description": "Highest acceptable price, in `currency`."
+    },
+    "destination": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Destination IATA code. Optional — omit to search anywhere."
+    },
+    "limit": {
+     "default": 20,
+     "maximum": 100,
+     "minimum": 1,
+     "type": "integer",
+     "description": "Max results (1-100, default 20)."
+    },
+    "currency": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Price currency (3 letters). Defaults to the server's currency."
+    },
+    "market": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "2-letter market whose price cache to read. Defaults to the\nserver's configured market."
+    }
+   },
+   "required": [
+    "origin",
+    "value_min",
+    "value_max"
+   ],
+   "type": "object"
+  }
+ },
+ {
+  "name": "lookup_airlines",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "search": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Airline name substring or exact IATA code (e.g. \"aeroflot\", \"SU\").\nOmit to list airlines from the start of the dataset."
+    },
+    "limit": {
+     "default": 50,
+     "maximum": 500,
+     "minimum": 1,
+     "type": "integer",
+     "description": "Max results to return (1-500, default 50)."
+    },
+    "locale": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "2-letter locale for names (e.g. \"en\", \"ru\"). Defaults to the\nserver's locale."
+    }
+   },
+   "type": "object"
+  }
+ },
+ {
+  "name": "lookup_airports",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "search": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Airport name substring, exact IATA code, or city code\n(e.g. \"heathrow\", \"LHR\", \"MOW\")."
+    },
+    "limit": {
+     "default": 50,
+     "maximum": 500,
+     "minimum": 1,
+     "type": "integer",
+     "description": "Max results to return (1-500, default 50)."
+    },
+    "locale": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "2-letter locale for names (e.g. \"en\", \"ru\"). Defaults to the\nserver's locale."
+    }
+   },
+   "type": "object"
+  }
+ },
+ {
+  "name": "lookup_cities",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "search": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "City name substring or exact IATA code (e.g. \"bangkok\", \"BKK\")."
+    },
+    "limit": {
+     "default": 50,
+     "maximum": 500,
+     "minimum": 1,
+     "type": "integer",
+     "description": "Max results to return (1-500, default 50)."
+    },
+    "locale": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "2-letter locale for names (e.g. \"en\", \"ru\"). Defaults to the\nserver's locale."
+    }
+   },
+   "type": "object"
+  }
+ },
+ {
+  "name": "lookup_countries",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "search": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Country name substring or exact code (e.g. \"thailand\", \"TH\")."
+    },
+    "limit": {
+     "default": 50,
+     "maximum": 500,
+     "minimum": 1,
+     "type": "integer",
+     "description": "Max results to return (1-500, default 50)."
+    },
+    "locale": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "2-letter locale for names (e.g. \"en\", \"ru\"). Defaults to the\nserver's locale."
+    }
+   },
+   "type": "object"
+  }
+ },
+ {
+  "name": "find_nearest_airports",
+  "inputSchema": {
+   "additionalProperties": false,
+   "properties": {
+    "near": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Place name or IATA code to search around (e.g. \"Pattaya\", \"UTP\")."
+    },
+    "latitude": {
+     "anyOf": [
+      {
+       "type": "number"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Latitude in degrees, -90 to 90. Overrides `near`."
+    },
+    "longitude": {
+     "anyOf": [
+      {
+       "type": "number"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Longitude in degrees, -180 to 180. Overrides `near`."
+    },
+    "limit": {
+     "default": 5,
+     "maximum": 50,
+     "minimum": 1,
+     "type": "integer",
+     "description": "Max airports to return (1-50, default 5)."
+    },
+    "max_distance_km": {
+     "anyOf": [
+      {
+       "exclusiveMinimum": 0,
+       "type": "number"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "Ignore airports further away than this. Optional."
+    },
+    "flightable_only": {
+     "default": true,
+     "type": "boolean",
+     "description": "Skip airports with no scheduled service (default True)."
+    },
+    "locale": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "2-letter locale for names. Defaults to the server's locale."
+    }
+   },
+   "type": "object"
+  }
+ }
+]
