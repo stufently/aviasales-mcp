@@ -3,6 +3,25 @@
 ## Unreleased
 
 ### Added
+- **Tool descriptions tell the model when to call each tool.** Every description
+  now opens with what the tool does and a separate `Use when` sentence, and
+  names the sibling tool when a nearby question belongs there. Read-only
+  annotations are unchanged, and so are tool names and input schemas. The
+  package version stays 0.5.0: this change does not bump it, so a client that
+  caches tool definitions on the server version keeps the previous text until
+  the next version bump
+- **README install is one `docker run` command**, the same command as the
+  client blocks. Claude Code (`.mcp.json` plus `claude mcp add`), Claude
+  Desktop, Cursor, Windsurf, and Zed each have their own heading and a strict
+  JSON block. Under Claude Desktop, a one-click install downloads the `.mcpb`
+  from `https://github.com/stufently/aviasales-mcp/releases/latest`. `Example
+  prompts` is five plain-language questions. Codex and the other clients stay
+- **Desktop Extension.** `mcpb/manifest.json` is a uv bundle
+  (`manifest_version` 0.4); `scripts/build-mcpb.sh` writes
+  `dist-mcpb/aviasales-mcp-<version>.mcpb` and installs nothing on the host.
+  `.github/workflows/mcpb.yml` runs on a `v*` tag, creates the GitHub Release
+  when the tag does not have one, and uploads the bundle. It does not publish
+  to GHCR, the MCP registry, PyPI, or npm
 - **Listed in the official MCP registry** as `io.github.stufently/aviasales-mcp`
   (`server.json`). The package it points to is the runtime image on GHCR,
   `ghcr.io/stufently/aviasales-mcp:<version>`, whose

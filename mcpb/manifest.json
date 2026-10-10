@@ -1,0 +1,69 @@
+{
+  "manifest_version": "0.4",
+  "name": "aviasales-mcp",
+  "display_name": "Aviasales Flights",
+  "description": "Search cached Aviasales flight prices and look up airport codes.",
+  "long_description": "Read-only flight search for Aviasales and Travelpayouts: fares by route and month, the cheapest day to fly, flexible dates, budget search, and airline, airport, city, and country lookup. Prices are per adult in economy. To run it you need a free Travelpayouts API token; an optional two-letter market selects which price cache to read.",
+  "author": {
+    "name": "stufently"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stufently/aviasales-mcp"
+  },
+  "homepage": "https://github.com/stufently/aviasales-mcp",
+  "support": "https://github.com/stufently/aviasales-mcp/issues",
+  "license": "GPL-3.0-or-later",
+  "keywords": ["aviasales", "travelpayouts", "flights", "mcp"],
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "python": ">=3.12"
+    }
+  },
+  "server": {
+    "type": "uv",
+    "entry_point": "launch.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": ["run", "--directory", "${__dirname}", "launch.py"],
+      "env": {
+        "AVIASALES_API_TOKEN": "${user_config.api_token}",
+        "AVIASALES_MARKET": "${user_config.market}"
+      }
+    }
+  },
+  "user_config": {
+    "api_token": {
+      "type": "string",
+      "title": "API token",
+      "description": "Travelpayouts API token. The server sends it as AVIASALES_API_TOKEN.",
+      "sensitive": true,
+      "required": true
+    },
+    "market": {
+      "type": "string",
+      "title": "Market",
+      "description": "2-letter market whose price cache to read (unset means ru). The same route in the same currency is priced differently per market.",
+      "default": ""
+    }
+  },
+  "privacy_policies": [
+    "https://support.travelpayouts.com/hc/en-us/articles/4408491722898-Privacy-Policy"
+  ],
+  "tools": [
+    {"name": "search_flights", "description": "Search flight prices between two cities on a date or across a month."},
+    {"name": "get_prices_calendar", "description": "Get grouped calendar prices for a route, one fare per day or per month."},
+    {"name": "get_flexible_date_prices", "description": "Compare prices for the days around a departure and an optional return."},
+    {"name": "get_latest_prices", "description": "Get the most recently found flight prices from other travellers' searches."},
+    {"name": "get_popular_directions", "description": "List the cities people most often fly to a destination from, with a fare."},
+    {"name": "get_city_directions", "description": "List the cheapest destinations reachable from a city, with a fare and dates."},
+    {"name": "get_alternative_directions", "description": "Get prices for nearby airports and cities around a chosen route."},
+    {"name": "search_by_price_range", "description": "Find flights whose cached fare falls inside a minimum and maximum price."},
+    {"name": "lookup_airlines", "description": "Look up airlines by name or IATA code."},
+    {"name": "lookup_airports", "description": "Look up airports by name, IATA code, or city code."},
+    {"name": "lookup_cities", "description": "Look up cities by name or IATA code and return the code flight tools expect."},
+    {"name": "lookup_countries", "description": "Look up countries by name or two-letter country code."},
+    {"name": "find_nearest_airports", "description": "Find the airports closest to a place name or to a latitude and longitude."}
+  ]
+}

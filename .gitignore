@@ -40,6 +40,9 @@ tmp/
 # Docker
 .docker/
 
+# Built Desktop Extension bundles (scripts/build-mcpb.sh)
+dist-mcpb/
+
 # OS
 .DS_Store
 Thumbs.db
