@@ -164,6 +164,11 @@ async def lookup_airlines(
 ) -> dict:
     """Look up airlines by name or IATA code.
 
+    Use when the user asks which airline a code belongs to, or wants the IATA
+    code for an airline name. For an airport, city, or country code use
+    `lookup_airports`, `lookup_cities`, or `lookup_countries`; for fares use
+    `search_flights`.
+
     Args:
         search: Airline name substring or exact IATA code (e.g. "aeroflot", "SU").
             Omit to list airlines from the start of the dataset.
@@ -186,11 +191,14 @@ async def lookup_airports(
 ) -> dict:
     """Look up airports by name, IATA code, or city code.
 
+    Use when the user names an airport or a code and needs its city, country,
+    or coordinates. For the closest airport to a town that does not share the
+    airport's name, use `find_nearest_airports` instead of this tool.
+
     The full dataset is ~10k airports, so always pass `search` — an unfiltered
     call just returns the first `limit` entries in dataset order. Results are
     ranked: exact code, then exact city code, then name matches, with airports
-    you cannot actually fly to last. To search by location instead of by name,
-    use `find_nearest_airports`.
+    you cannot actually fly to last.
 
     Args:
         search: Airport name substring, exact IATA code, or city code
@@ -213,7 +221,11 @@ async def lookup_cities(
     limit: Annotated[int, Field(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
     locale: str | None = None,
 ) -> dict:
-    """Look up cities by name or IATA code — use this to turn a city name into a code.
+    """Look up cities by name or IATA code and return the code flight tools expect.
+
+    Use when the user names a city and a flight search needs its IATA code.
+    For an airport code use `lookup_airports`; for the nearest airport to a
+    place that is not itself a city, use `find_nearest_airports`.
 
     Every flight tool takes IATA codes, so this is usually the first call when
     the user names a place. The full dataset is ~9.6k cities, so always pass
@@ -239,7 +251,11 @@ async def lookup_countries(
     limit: Annotated[int, Field(ge=1, le=MAX_LIMIT)] = DEFAULT_LIMIT,
     locale: str | None = None,
 ) -> dict:
-    """Look up countries by name or two-letter code.
+    """Look up countries by name or two-letter country code.
+
+    Use when the user asks which country a code belongs to, or wants that
+    country's code or currency. For a city or airport code use `lookup_cities`
+    or `lookup_airports`; this tool does not search flight prices.
 
     Args:
         search: Country name substring or exact code (e.g. "thailand", "TH").
@@ -312,12 +328,13 @@ async def find_nearest_airports(
     flightable_only: bool = True,
     locale: str | None = None,
 ) -> dict:
-    """Find the airports closest to a place, by distance.
+    """Find the airports closest to a place name or to a latitude and longitude.
 
-    Answers "which airport should I fly into for Pattaya?" — a question
-    `lookup_airports` cannot, because it only matches on name and the nearest
-    airport is rarely named after the town. Feed the returned `city_code` (not
-    the airport code) to `search_flights` for the widest choice of fares.
+    Use when the user asks which airport to fly into for a town, a resort, or
+    a point on the map. `lookup_airports` only matches a name, and the nearest
+    airport is rarely named after the town, so call this tool for that
+    question. Feed the returned city code, not the airport code, to
+    `search_flights` for fares.
 
     Pass either `near` (resolved against the city and airport datasets) or an
     explicit `latitude`/`longitude` pair.

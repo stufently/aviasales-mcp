@@ -316,12 +316,17 @@ async def search_flights(
     depart_after: str | None = None,
     depart_before: str | None = None,
 ) -> dict:
-    """Search flight prices between two cities.
+    """Search flight prices between two cities on a date or across a month.
+
+    Use when the user names both ends of a route and wants fares, a booking
+    link, or only departures inside a time window. For the cheapest day in a
+    month use `get_prices_calendar`; for the days around dates already chosen
+    use `get_flexible_date_prices`; for a budget with no destination use
+    `search_by_price_range`.
 
     Both codes must be IATA — call `lookup_cities` first if you only have a city
-    name. For the cheapest date across a whole month use `get_prices_calendar`;
-    for nearby airports use `get_alternative_directions`. A multi-city trip needs
-    one call per leg.
+    name. For nearby airports use `get_alternative_directions`. A multi-city
+    trip needs one call per leg.
 
     Note on passengers: the price data comes from a cache of recent searches and
     is always PER ADULT in economy. The adults/children/infants/trip_class
@@ -440,11 +445,12 @@ async def get_prices_calendar(
     infants: Annotated[int, Field(ge=0, le=8)] = 0,
     trip_class: Literal["economy", "comfort", "business", "first"] = "economy",
 ) -> dict:
-    """Get grouped (calendar) prices for a route — the cheapest day or month to fly.
+    """Get grouped calendar prices for a route, one fare per day or per month.
 
-    Use this instead of `search_flights` when the question is "when is it
-    cheapest" rather than "what is available on this date". Codes are IATA; use
-    `lookup_cities` to resolve a name first.
+    Use when the user asks which day or month is cheapest to fly a known route.
+    For fares on one specific date use `search_flights`; for a few days either
+    side of dates already chosen use `get_flexible_date_prices`. Codes are
+    IATA; use `lookup_cities` to resolve a name first.
 
     Prices are per adult (cached); passenger parameters are encoded into each
     booking_link.
@@ -527,11 +533,12 @@ async def get_latest_prices(
     infants: Annotated[int, Field(ge=0, le=8)] = 0,
     trip_class: Literal["economy", "comfort", "business", "first"] = "economy",
 ) -> dict:
-    """Get the latest (most recently found) flight prices.
+    """Get the most recently found flight prices from other travellers' searches.
 
-    This is a firehose of what other users just searched, not a search for a
-    specific trip — for that use `search_flights`. Prices are per adult (cached);
-    passenger parameters are encoded into each booking_link.
+    Use when the user wants the latest fares that just appeared, on one route
+    or across the whole cache. For a specific trip on chosen dates use
+    `search_flights` instead. Prices are per adult (cached); passenger
+    parameters are encoded into each booking_link.
 
     These rows come from the older v2 shape: they name the selling `agency`
     rather than an airline, carry no flight number, and their booking_link is
@@ -598,11 +605,11 @@ async def get_popular_directions(
     currency: str | None = None,
     locale: str | None = None,
 ) -> dict:
-    """Get the cities people most often fly to a destination FROM.
+    """List the cities people most often fly to a destination from, with a fare.
 
-    Direction matters: this answers "where do travellers reach BKK from, and for
-    how much", keyed on the destination. For the opposite question — "where can I
-    fly from Moscow" — use `get_city_directions`. For prices on a known route use
+    Use when the user asks where travellers reach a city from and what that
+    costs. The request is keyed on the destination. For where someone can fly
+    from a city use `get_city_directions`; for prices on one known route use
     `search_flights`.
 
     Args:
@@ -648,12 +655,12 @@ async def get_city_directions(
     origin: str,
     currency: str | None = None,
 ) -> dict:
-    """Get the cheapest destinations reachable FROM a city — "where can I fly from X".
+    """List the cheapest destinations reachable from a city, with a fare and dates.
 
-    This is the inspiration search for an open-ended "somewhere warm, cheap,
-    soon" question: one call returns many destinations with a real fare and
-    dates. Narrow it down afterwards with `search_flights` or
-    `get_prices_calendar`.
+    Use when the user asks where they can fly from a city, or wants somewhere
+    cheap without naming a destination. For who flies into a city use
+    `get_popular_directions`; to price one chosen route afterwards use
+    `search_flights` or `get_prices_calendar`.
 
     Args:
         origin: Origin city IATA code (e.g. "MOW"). Use `lookup_cities` to
@@ -701,11 +708,12 @@ async def get_flexible_date_prices(
     infants: Annotated[int, Field(ge=0, le=8)] = 0,
     trip_class: Literal["economy", "comfort", "business", "first"] = "economy",
 ) -> dict:
-    """Compare prices for the days around your dates — "can I save by shifting a day?".
+    """Compare prices for the days around a departure and an optional return.
 
-    Covers roughly a week's window around both the outbound and the return date,
-    which is the question `search_flights` (one exact date) and
-    `get_prices_calendar` (a whole month, departures only) both miss.
+    Use when the user already has dates and asks whether shifting a day either
+    way would be cheaper. For one exact date use `search_flights`; for the
+    cheapest day across a whole month use `get_prices_calendar`. This covers
+    roughly a week around both the outbound and the return.
 
     Args:
         origin: Origin IATA code.
@@ -772,15 +780,16 @@ async def search_by_price_range(
     currency: str | None = None,
     market: str | None = None,
 ) -> dict:
-    """Find flights whose price falls inside a budget — "anywhere under 30000 from Moscow".
+    """Find flights whose cached fare falls inside a minimum and maximum price.
 
-    Leave `destination` unset to let the budget pick the destination; that is the
-    query none of the other tools can answer. Prices are per adult in economy.
+    Use when the user has a budget, including anywhere under a price with no
+    destination named. Leave `destination` unset to let the budget pick the
+    city; prices are per adult in economy. For a named route on a date or a
+    month use `search_flights` or `get_prices_calendar`.
 
     There is deliberately no date argument: this endpoint ignores one (verified —
     passing a December date returns the same July and September fares), and each
-    result carries its own `departure_at`. To search a specific period use
-    `search_flights` or `get_prices_calendar`.
+    result carries its own `departure_at`.
 
     Args:
         origin: Origin IATA code.
@@ -841,10 +850,12 @@ async def get_alternative_directions(
     currency: str | None = None,
     market: str | None = None,
 ) -> dict:
-    """Get prices for alternative (nearby) airports/cities.
+    """Get prices for nearby airports and cities around a chosen route.
 
-    Useful when the traveller is flexible about the exact airport. To find which
-    airports are near a place in the first place, use `find_nearest_airports`.
+    Use when the traveller can fly from or into a different airport and wants
+    those fares. To learn which airports are near a place, use
+    `find_nearest_airports` first; for the named city pair only, use
+    `search_flights`.
 
     Args:
         origin: Origin IATA code.

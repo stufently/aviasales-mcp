@@ -140,6 +140,15 @@ async def test_decorated_tools_keep_their_schema():
 
 
 @pytest.mark.asyncio
+async def test_tool_descriptions_say_when_to_call_them():
+    # The description is the only text the model sees when choosing a tool.
+    for tool in await server.mcp.list_tools():
+        description = tool.description or ""
+        assert "Use when" in description, tool.name
+        assert len(description.split()) >= 25, (tool.name, len(description.split()))
+
+
+@pytest.mark.asyncio
 async def test_lifespan_closes_the_pooled_http_client():
     pooled = api_client._pooled_client()
     assert not pooled.is_closed

@@ -12,9 +12,19 @@ Unlike Google-Flights-scraping MCP servers, place names do not have to be
 guessed into IATA codes by the model: `lookup_cities` and `find_nearest_airports`
 resolve them.
 
+## Example prompts
+
+Ask in plain language. The server picks the tool.
+
+- How much is a flight from Moscow to Istanbul in March?
+- What is the cheapest day to fly to Bangkok in September?
+- I am flying Berlin to Lisbon on 12 May and back on the 19th. Would shifting a day either way be cheaper?
+- Where can I fly from St Petersburg for under 30 000 rubles?
+- Which airport should I fly into for Pattaya, and what does it cost from Dubai?
+
 ## Common prompts
 
-Ask your agent in plain language — it picks the tool.
+The same kind of question, with the tools a typical agent reaches for.
 
 | Prompt | Tools it reaches for |
 |--------|----------------------|
@@ -27,30 +37,33 @@ Ask your agent in plain language — it picks the tool.
 
 ## Install
 
-You need two things: Docker, and a free Travelpayouts API token from
-<https://www.travelpayouts.com/programs/100/tools/api>.
-
-The server ships as a container image, `ghcr.io/stufently/aviasales-mcp`. Your
-MCP client starts it on demand, so there is nothing to install beyond pasting one
-block below. To check the image starts, send it one `initialize` — it should
-print a JSON reply naming the server, `"name":"Aviasales"`. This does not test
-the token itself; a wrong one surfaces as an error on the first search:
+Paste this into a terminal. It is the same `docker` command every client block
+below runs; the process speaks MCP on stdin and waits there.
 
 ```bash
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"check","version":"0"}}}' \
-  | docker run -i --rm -e AVIASALES_API_TOKEN=your-token-here ghcr.io/stufently/aviasales-mcp:latest
+AVIASALES_API_TOKEN=your-token-here AVIASALES_MARKET=ru \
+  docker run -i --rm \
+  -e AVIASALES_API_TOKEN \
+  -e AVIASALES_MARKET \
+  ghcr.io/stufently/aviasales-mcp:latest
 ```
 
+You need Docker, and a free Travelpayouts API token from
+<https://www.travelpayouts.com/programs/100/tools/api>. A wrong token still
+lets the process start; it surfaces as an error on the first search.
+`AVIASALES_MARKET` is optional — see [Configuration](#configuration). Drop
+that variable and its `-e` pair if you do not need it.
+
 `:latest` follows releases; pin a version tag (`:0.5.0`) if you would rather
-upgrade by hand. The package is also PyPI-ready; once it is on PyPI, `uvx
-aviasales-mcp` will work wherever `docker run -i --rm … image` does below.
+upgrade by hand. The package is PyPI-ready, and it is not on PyPI: `uvx
+aviasales-mcp` does nothing useful until a release is uploaded. Until then
+the command above is the install path.
 
 ## MCP client configs
 
-Every block runs the same command. `-e AVIASALES_API_TOKEN` with no value hands
-the container the variable the client sets in `env`, so the token is written in
-exactly one place. `AVIASALES_MARKET` is optional but worth setting — see
-[Configuration](#configuration); delete it and its `-e` pair if you do not need it.
+Every block runs the same `docker` command as the terminal snippet above.
+`-e AVIASALES_API_TOKEN` with no value hands the container the variable the
+client sets in `env`, so the token is written in exactly one place.
 
 > **Keep the token out of anything you commit.** A project-level `.mcp.json`,
 > `.cursor/mcp.json` or `.zed/settings.json` is a normal thing to check into git,
@@ -59,23 +72,7 @@ exactly one place. `AVIASALES_MARKET` is optional but worth setting — see
 
 ### Claude Code
 
-```bash
-claude mcp add --scope user aviasales -e AVIASALES_API_TOKEN=your-token-here -- \
-  docker run -i --rm -e AVIASALES_API_TOKEN ghcr.io/stufently/aviasales-mcp:latest
-```
-
-`--scope user` makes it available in every project and keeps the token in
-`~/.claude.json`, out of the repository. Check with `claude mcp list`.
-
-### Claude Desktop, Cursor, Windsurf
-
-All three take the same `mcpServers` JSON; only the file differs:
-
-| Client | Config file |
-|--------|-------------|
-| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS), `%APPDATA%\Claude\claude_desktop_config.json` (Windows) |
-| Cursor | `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project) |
-| Windsurf (Devin Desktop) | `~/.codeium/windsurf/mcp_config.json`; newer builds read `~/.config/devin/mcp_config.json` — the MCP settings page opens the right one |
+Project file: `.mcp.json` in the project root.
 
 ```json
 {
@@ -97,13 +94,107 @@ All three take the same `mcpServers` JSON; only the file differs:
 }
 ```
 
+Or from the terminal:
+
+```bash
+claude mcp add --scope user aviasales \
+  -e AVIASALES_API_TOKEN=your-token-here -e AVIASALES_MARKET=ru -- \
+  docker run -i --rm -e AVIASALES_API_TOKEN -e AVIASALES_MARKET \
+  ghcr.io/stufently/aviasales-mcp:latest
+```
+
+`--scope user` makes it available in every project and keeps the token in
+`~/.claude.json`, out of the repository. Check with `claude mcp list`.
+
+### Claude Desktop
+
+File: `claude_desktop_config.json` — macOS
+`~/Library/Application Support/Claude/claude_desktop_config.json`, Windows
+`%APPDATA%\Claude\claude_desktop_config.json`, Linux
+`~/.config/Claude/claude_desktop_config.json`.
+
+```json
+{
+  "mcpServers": {
+    "aviasales": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "AVIASALES_API_TOKEN",
+        "-e", "AVIASALES_MARKET",
+        "ghcr.io/stufently/aviasales-mcp:latest"
+      ],
+      "env": {
+        "AVIASALES_API_TOKEN": "your-token-here",
+        "AVIASALES_MARKET": "ru"
+      }
+    }
+  }
+}
+```
+
+One click, without editing JSON: download the `.mcpb` from
+https://github.com/stufently/aviasales-mcp/releases/latest and open it.
+Claude Desktop installs the extension and asks for the Travelpayouts API token.
+
 Claude Desktop starts with a trimmed `PATH` and may not find `docker` by name: if
 the server fails to start, replace `"docker"` with its absolute path
 (`which docker`).
 
+### Cursor
+
+File: `~/.cursor/mcp.json` (every project) or `.cursor/mcp.json` (this project).
+
+```json
+{
+  "mcpServers": {
+    "aviasales": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "AVIASALES_API_TOKEN",
+        "-e", "AVIASALES_MARKET",
+        "ghcr.io/stufently/aviasales-mcp:latest"
+      ],
+      "env": {
+        "AVIASALES_API_TOKEN": "your-token-here",
+        "AVIASALES_MARKET": "ru"
+      }
+    }
+  }
+}
+```
+
+### Windsurf
+
+File: `mcp_config.json` — macOS and Linux `~/.config/devin/mcp_config.json`
+(or `$XDG_CONFIG_HOME/devin/mcp_config.json`), Windows
+`%APPDATA%\devin\mcp_config.json`. Older builds read
+`~/.codeium/windsurf/mcp_config.json`.
+
+```json
+{
+  "mcpServers": {
+    "aviasales": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "AVIASALES_API_TOKEN",
+        "-e", "AVIASALES_MARKET",
+        "ghcr.io/stufently/aviasales-mcp:latest"
+      ],
+      "env": {
+        "AVIASALES_API_TOKEN": "your-token-here",
+        "AVIASALES_MARKET": "ru"
+      }
+    }
+  }
+}
+```
+
 ### Zed
 
-`~/.config/zed/settings.json` (or **zed: open settings**):
+File: `settings.json` at `~/.config/zed/settings.json` (or **zed: open settings**).
 
 ```json
 {

@@ -43,3 +43,4 @@
 | 11 | Competitor + API-surface audit; fixed latest-prices/popular-directions/agency/market defects, added 4 tools | 2026-07-29 |
 | 12 | PyPI-ready packaging (urls, license-files, py.typed, classifiers), README install + client configs, repo description and topics | 2026-08-21 |
 | 13 | GHCR image + listing in the official MCP registry via GitHub OIDC; README install via Docker for Claude Code, Claude Desktop, Cursor, Windsurf, Zed, Codex | 2026-10-09 |
+| 14 | Tool `Use when` descriptions, per-client README JSON, `.mcpb` bundle and tag workflow | 2026-10-10 |
