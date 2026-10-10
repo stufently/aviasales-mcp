@@ -1,4 +1,5 @@
 import logging
+import re
 
 import pytest
 from pydantic import SecretStr
@@ -121,6 +122,8 @@ async def test_tools_are_annotated_read_only():
         assert tool.annotations.destructiveHint is False, tool.name
         # Every answer comes from a remote API, not from this process.
         assert tool.annotations.openWorldHint is True, tool.name
+        # Same arguments, same cached answer: a host may retry without asking.
+        assert tool.annotations.idempotentHint is True, tool.name
 
 
 @pytest.mark.asyncio
@@ -144,8 +147,25 @@ async def test_tool_descriptions_say_when_to_call_them():
     # The description is the only text the model sees when choosing a tool.
     for tool in await server.mcp.list_tools():
         description = tool.description or ""
-        assert "Use when" in description, tool.name
+        # `Use when` opens its own sentence, after the one-line summary.
+        assert re.search(r"(?:^|[.!?]\s+)Use when ", description), tool.name
+        assert not description.startswith("Use when"), tool.name
         assert len(description.split()) >= 25, (tool.name, len(description.split()))
+
+
+@pytest.mark.asyncio
+async def test_tool_descriptions_point_only_at_real_tools():
+    # A renamed tool must not leave a sibling telling the model to call a ghost.
+    tools = await server.mcp.list_tools()
+    names = {tool.name for tool in tools}
+    for tool in tools:
+        description = tool.description or ""
+        mentioned = set(re.findall(r"`([a-z]+(?:_[a-z]+)+)`", description))
+        referenced = {
+            name for name in mentioned if name.split("_")[0] in {"search", "get", "lookup", "find"}
+        }
+        assert referenced <= names, (tool.name, referenced - names)
+        assert tool.name not in referenced, tool.name
 
 
 @pytest.mark.asyncio
