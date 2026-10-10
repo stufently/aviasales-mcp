@@ -3,7 +3,7 @@
   "name": "io.github.stufently/aviasales-mcp",
   "title": "Aviasales Flight Prices",
   "description": "Flight price search via Aviasales/Travelpayouts: fares by route, cheapest days, flexible dates.",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "websiteUrl": "https://github.com/stufently/aviasales-mcp",
   "repository": {
     "url": "https://github.com/stufently/aviasales-mcp",
@@ -13,7 +13,7 @@
   "packages": [
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/stufently/aviasales-mcp:0.5.0",
+      "identifier": "ghcr.io/stufently/aviasales-mcp:0.5.1",
       "transport": {
         "type": "stdio"
       },

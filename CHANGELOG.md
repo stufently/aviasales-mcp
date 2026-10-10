@@ -2,14 +2,17 @@
 
 ## Unreleased
 
+## 0.5.1 — 2026-10-10
+
 ### Added
+- **`glama.json`** in the repository root names the maintainer for the Glama
+  directory listing
 - **Tool descriptions tell the model when to call each tool.** Every description
   now opens with what the tool does and a separate `Use when` sentence, and
   names the sibling tool when a nearby question belongs there. Read-only
-  annotations are unchanged, and so are tool names and input schemas. The
-  package version stays 0.5.0: this change does not bump it, so a client that
-  caches tool definitions on the server version keeps the previous text until
-  the next version bump
+  annotations are unchanged, and so are tool names and input schemas. They
+  ship in 0.5.1, so a client that caches tool definitions on the server
+  version picks up the new text
 - **README install is one `docker run` command**, the same command as the
   client blocks. Claude Code (`.mcp.json` plus `claude mcp add`), Claude
   Desktop, Cursor, Windsurf, and Zed each have their own heading and a strict
