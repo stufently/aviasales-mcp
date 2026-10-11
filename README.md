@@ -137,6 +137,16 @@ One click, without editing JSON: download the `.mcpb` from
 https://github.com/stufently/aviasales-mcp/releases/latest and open it.
 Claude Desktop installs the extension and asks for the Travelpayouts API token.
 
+The same release includes `checksums.txt`, the SHA256 of every `.mcpb`.
+Download it into the same directory as the bundle and check it before opening
+the bundle:
+
+```bash
+sha256sum -c --ignore-missing checksums.txt   # run next to the downloaded .mcpb
+```
+
+On macOS, `shasum -a 256 -c` checks the same file.
+
 Claude Desktop starts with a trimmed `PATH` and may not find `docker` by name: if
 the server fails to start, replace `"docker"` with its absolute path
 (`which docker`).
