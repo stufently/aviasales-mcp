@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added
+
+- **Release checksums for `.mcpb`.** The tag workflow writes `checksums.txt`
+  (SHA256 of every bundle, in `sha256sum` format) and uploads it next to the
+  bundle. The README shows how to check a download before opening it.
+
 ## 0.5.1 — 2026-10-10
 
 ### Added
