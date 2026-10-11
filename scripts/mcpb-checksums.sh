@@ -37,7 +37,8 @@ if [ "${#bundles[@]}" -eq 0 ]; then
   exit 1
 fi
 
-mapfile -t names < <(printf '%s\n' "${bundles[@]}" | LC_ALL=C sort)
+# NUL-delimited so a bundle name that contains a newline stays one name.
+mapfile -d '' names < <(printf '%s\0' "${bundles[@]}" | LC_ALL=C sort -z)
 
 sums_dir=$(dirname -- "$sums")
 tmp=$(mktemp "${sums_dir}/.mcpb-checksums.XXXXXX")
@@ -83,10 +84,12 @@ else
   chmod 644 -- "$tmp"
 fi
 
-# Check the lines we just wrote before publishing them over SUMS. A mismatch
-# must not replace a checksum file the release already published.
+# Check the bundle lines we just wrote before publishing them over SUMS.
+# A preserved note that merely ends in .mcpb is not a checksum line; feeding
+# it to sha256sum -c --strict would reject an update the file is allowed to hold.
+# A mismatch must not replace a checksum file the release already published.
 if ! check_out=$(
-  grep '\.mcpb$' -- "$tmp" | (
+  grep -E '^\\?[0-9a-f]{64}  .*\.mcpb$' -- "$tmp" | (
     cd -- "$dir" || exit 1
     sha256sum -c --strict -
   )
