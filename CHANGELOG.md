@@ -4,9 +4,29 @@
 
 ### Added
 
+- **PyPI release through Trusted Publishing.** `.github/workflows/release.yml`
+  (formerly `mcpb.yml`) runs on a `v*` tag: the CI workflow (now callable via
+  `workflow_call`), an sdist and a wheel whose version must match the tag,
+  `pyproject.toml` and `server.json`, a byte-for-byte check of every package
+  file in both archives, `twine check --strict`, then an OIDC upload by
+  `pypa/gh-action-pypi-publish` from the `pypi` environment. No token is
+  stored. All actions are pinned to commit SHAs. Nothing is published until
+  the project is registered as a pending publisher on PyPI
+- **One `checksums.txt` per release** covering the sdist, the wheel and the
+  `.mcpb`, checked with `sha256sum -c --strict` before upload. The bundle is
+  attached only after the PyPI upload succeeds
+- **README: "Verified clients and OS"**, listing only what was run (CI matrix,
+  stdio handshake, Claude Code on Linux) and marking every other client and OS
+  as not verified; SECURITY.md and README state that every tool is read-only
 - **Release checksums for `.mcpb`.** The tag workflow writes `checksums.txt`
   (SHA256 of every bundle, in `sha256sum` format) and uploads it next to the
   bundle. The README shows how to check a download before opening it.
+
+### Changed
+
+- **The sdist holds only the package, tests, README, CHANGELOG, SECURITY,
+  LICENSE and `pyproject.toml`** instead of the whole checkout (agent notes,
+  specs, CI files). The README's LICENSE link is absolute so it works on PyPI
 
 ## 0.5.1 — 2026-10-10
 

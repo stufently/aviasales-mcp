@@ -1,0 +1,308 @@
+# Release: a `v*` tag publishes the package to PyPI and attaches the sdist,
+# wheel, Desktop Extension (.mcpb) and one `checksums.txt` to the GitHub
+# Release. The GHCR image and the MCP registry listing are registry.yml.
+#
+# Only a pushed `v*` tag triggers it, never a push to main. A version on PyPI
+# cannot be replaced or re-uploaded, so everything that can be checked before
+# the upload is checked before the upload, and the job fails rather than
+# guesses.
+#
+# Upload credentials: none. PyPI Trusted Publishing (OIDC) swaps the
+# short-lived token GitHub mints for this workflow, in this repository, in
+# this environment, for a one-off upload credential. There is no API token in
+# a repo secret. It needs a one-time registration on PyPI (a "pending
+# publisher" until the first upload), against exactly these values:
+#
+#     PyPI project  aviasales-mcp
+#     owner         stufently
+#     repository    aviasales-mcp
+#     workflow      release.yml        <- the file name of this file
+#     environment   pypi               <- `environment:` on publish-pypi
+#
+# Renaming this file or that environment breaks the trust relationship and the
+# publish fails closed. Until the publisher is registered, publish-pypi fails
+# and nothing after it runs.
+#
+# Actions are pinned to a commit SHA: tags on other repositories are mutable.
+# Each was resolved from its tag through the GitHub API on 2026-10-12
+# (`gh api repos/<owner>/<repo>/git/ref/tags/<tag>`, an annotated tag
+# dereferenced to its commit):
+#   actions/checkout               v7.0.1   -> 3d3c42e5aac5ba805825da76410c181273ba90b1
+#   actions/setup-python           v7.0.0   -> 5fda3b95a4ea91299a34e894583c3862153e4b97
+#   actions/upload-artifact        v7.0.2   -> cf430e030ddbb5b0abf93d22962f4752f3646cd9
+#   actions/download-artifact      v8.0.2   -> 9000827ccba6bdab643e8b6fd33ac0654aef8333
+#   pypa/gh-action-pypi-publish    v1.14.2  -> dc37677b2e1c63e2034f94d8a5b11f265b73ba33
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+# Not cancelled: a run halfway through an upload must not be cut in half.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # The CI workflow itself, not a copy of it: a tag that fails the suite on
+  # any supported Python is not released.
+  tests:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  build:
+    name: Build sdist + wheel
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+
+      # PyPI takes the version from the package metadata, not from the tag. A
+      # tag that disagrees with pyproject.toml would publish one number under
+      # a release everyone reads as another, permanently.
+      - name: Tag, pyproject and server.json name the same version
+        env:
+          GIT_TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          import tomllib
+
+          tag = os.environ["GIT_TAG"]
+          if not tag.startswith("v"):
+              sys.exit(f"::error::tag {tag!r} does not start with 'v'")
+          from_tag = tag.removeprefix("v")
+          with open("pyproject.toml", "rb") as handle:
+              declared = tomllib.load(handle)["project"]["version"]
+          with open("server.json", encoding="utf-8") as handle:
+              manifest = json.load(handle)["version"]
+          if from_tag != declared or manifest != declared:
+              sys.exit(
+                  f"::error::tag says {from_tag}, pyproject.toml says {declared}, "
+                  f"server.json says {manifest}. Nothing is published while they "
+                  f"disagree: a version on PyPI cannot be replaced. Fix the files "
+                  f"and move the tag."
+              )
+          print(f"tag, pyproject.toml and server.json agree on {declared}")
+          PY
+
+      - name: Install build tools
+        run: python -m pip install "build==1.6.1" "twine==7.0.0" "packaging==26.3"
+
+      - name: Build distributions
+        run: python -m build --sdist --wheel --outdir dist/
+
+      # Two failures that both look like a successful release: an archive for
+      # another version than the tag, and an archive that validates, uploads
+      # and installs while missing code. Every file of the package under src/
+      # is compared byte for byte with its copy in each archive.
+      - name: The archives carry this version and all of the package
+        env:
+          GIT_TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+          import tarfile
+          import zipfile
+          from pathlib import Path
+
+          from packaging.utils import (
+              canonicalize_name,
+              parse_sdist_filename,
+              parse_wheel_filename,
+          )
+          from packaging.version import Version
+
+          version = Version(os.environ["GIT_TAG"].removeprefix("v"))
+          name = canonicalize_name("aviasales-mcp")
+
+          dist = Path("dist")
+          wheels = sorted(dist.glob("*.whl"))
+          sdists = sorted(dist.glob("*.tar.gz"))
+          if len(wheels) != 1 or len(sdists) != 1:
+              found = sorted(p.name for p in dist.iterdir())
+              sys.exit(f"::error::expected one wheel and one sdist in dist/, found {found}")
+          wheel, sdist = wheels[0], sdists[0]
+
+          # Parsed, not string-matched: the file name carries the PEP 440
+          # normalized version (`1.0-rc1` becomes `1.0rc1`).
+          wheel_name, wheel_version, _, _ = parse_wheel_filename(wheel.name)
+          sdist_name, sdist_version = parse_sdist_filename(sdist.name)
+          for label, built_name, built_version in (
+              ("wheel", wheel_name, wheel_version),
+              ("sdist", sdist_name, sdist_version),
+          ):
+              if built_name != name:
+                  sys.exit(f"::error::{label} is named {built_name}, expected {name}")
+              if built_version != version:
+                  sys.exit(f"::error::{label} is version {built_version}, tag says {version}")
+
+          package = Path("src/aviasales_mcp")
+          sources = sorted(
+              p for p in package.rglob("*") if p.is_file() and "__pycache__" not in p.parts
+          )
+          if not any(p.suffix == ".py" for p in sources):
+              sys.exit("::error::no source files found to check the archives against")
+
+          with zipfile.ZipFile(wheel) as archive:
+              in_wheel = {n: archive.read(n) for n in archive.namelist()}
+          with tarfile.open(sdist) as archive:
+              in_sdist = {
+                  m.name.split("/", 1)[1]: archive.extractfile(m).read()
+                  for m in archive.getmembers()
+                  if m.isfile() and "/" in m.name
+              }
+
+          problems = []
+          for source in sources:
+              content = source.read_bytes()
+              wheel_path = source.relative_to("src").as_posix()
+              sdist_path = source.as_posix()
+              if in_wheel.get(wheel_path) != content:
+                  problems.append(f"wheel:{wheel_path}")
+              if in_sdist.get(sdist_path) != content:
+                  problems.append(f"sdist:{sdist_path}")
+          if problems:
+              sys.exit(f"::error::missing or different in the archives: {problems[:10]}")
+          print(f"{len(sources)} package files identical in both archives")
+          PY
+
+      # What PyPI runs on the metadata before accepting an upload. A rejection
+      # after the upload starts would cost the version number.
+      - name: Validate the metadata PyPI will read
+        run: python -m twine check --strict dist/*
+
+      # Outside dist/: dist/ goes to PyPI as is, and a checksums file in it
+      # would be offered as a distribution.
+      - name: Checksums for the distributions
+        run: |
+          mkdir -p checksums
+          (cd dist && sha256sum -- *) > checksums/checksums.txt
+          cat checksums/checksums.txt
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: checksums
+          path: checksums/
+          if-no-files-found: error
+
+  # The Desktop Extension is not a Python distribution: it is built in its own
+  # job and never lands in dist/, which is what PyPI receives.
+  build-mcpb:
+    name: Build Desktop Extension
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build mcpb bundle
+        run: bash scripts/build-mcpb.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mcpb
+          path: dist-mcpb/*.mcpb
+          if-no-files-found: error
+
+  publish-pypi:
+    name: Publish to PyPI (trusted publishing)
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      # Part of the trust relationship registered on PyPI; see the header.
+      name: pypi
+      url: https://pypi.org/project/aviasales-mcp/
+    permissions:
+      # The only job with an OIDC token, and the only place it is needed.
+      id-token: write
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: dist/
+          # A re-run over a version PyPI already holds means the tag moved;
+          # the file on PyPI is not the one this run built. Fail.
+          skip-existing: false
+
+  github-release:
+    name: GitHub Release assets
+    # After the upload: release assets for a version that never reached PyPI
+    # describe something nobody can install.
+    needs:
+      - publish-pypi
+      - build-mcpb
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download distributions
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: assets/
+      - name: Download distribution checksums
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: checksums
+          path: assets/
+      - name: Download mcpb bundle
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: mcpb
+          path: assets/
+
+      # One checksums.txt for every asset: the sdist and wheel lines from the
+      # build job, the bundle lines added by the script the bundle has always
+      # used. Every line is then checked against the files about to upload.
+      - name: Add the mcpb bundle to the checksums and verify them
+        run: |
+          bash scripts/mcpb-checksums.sh assets assets/checksums.txt
+          cat assets/checksums.txt
+          (cd assets && sha256sum -c --strict checksums.txt)
+          expected=$(find assets -maxdepth 1 -type f ! -name checksums.txt | wc -l)
+          listed=$(wc -l < assets/checksums.txt)
+          if [ "$expected" != "$listed" ]; then
+            echo "::error::checksums.txt lists $listed files, assets/ holds $expected"
+            exit 1
+          fi
+
+      - name: Create the GitHub release when the tag has none
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "release already exists"
+          else
+            gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
+          fi
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" assets/* --clobber
