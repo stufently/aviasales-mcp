@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.5.2 — 2026-10-12
+
 ### Added
 
 - **PyPI release through Trusted Publishing.** `.github/workflows/release.yml`
