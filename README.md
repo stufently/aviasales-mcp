@@ -54,7 +54,7 @@ lets the process start; it surfaces as an error on the first search.
 `AVIASALES_MARKET` is optional — see [Configuration](#configuration). Drop
 that variable and its `-e` pair if you do not need it.
 
-`:latest` follows releases; pin a version tag (`:0.5.1`) if you would rather
+`:latest` follows releases; pin a version tag (`:0.5.2`) if you would rather
 upgrade by hand. The package is not on PyPI yet: the release workflow is
 ready, and the first upload waits for the maintainer to register the project on
 PyPI. Until then `uvx aviasales-mcp` finds nothing and the command above is the
