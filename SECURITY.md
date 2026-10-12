@@ -12,7 +12,9 @@ the problem.
 ## What the server touches
 
 All thirteen tools are read-only: the server searches cached fares and reference data and never
-books or buys anything.
+books or buys anything. No tool writes, deletes, or spends money, so there is no read-only mode
+to switch on — the server has nothing else. Every tool carries the MCP annotations
+`readOnlyHint: true` and `destructiveHint: false`.
 
 - **One credential:** `AVIASALES_API_TOKEN`, your Travelpayouts API token. It is read from the
   environment and sent only to `api.travelpayouts.com`, in the `X-Access-Token` header. It is

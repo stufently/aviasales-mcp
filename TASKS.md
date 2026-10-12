@@ -2,15 +2,12 @@
 
 ## Active
 
-- [ ] **Publish to PyPI** (owner — needs the account and an API token, or a
-      trusted publisher configured on pypi.org). Packaging is done and verified:
-      `python -m build` produces both artifacts and `twine check` passes on each,
-      and README already carries the `mcp-name:` marker the MCP registry checks on
-      PyPI. Remaining steps are all credentialed — claim the `aviasales-mcp` name,
-      `twine upload dist/*` (or a trusted-publisher GitHub Action), then add a
-      `"registryType": "pypi"` package to `server.json` beside the OCI one and
-      re-run the `MCP Registry` workflow with a bumped version. Until then the
-      README's `uvx` mention stays conditional
+- [ ] **Publish to PyPI** (owner). `release.yml` and the GitHub environment
+      `pypi` (tag rule `v*`) are in place. Register the pending publisher on
+      pypi.org (project `aviasales-mcp`, owner `stufently`, repository
+      `aviasales-mcp`, workflow `release.yml`, environment `pypi`), bump the
+      version in `pyproject.toml` and `server.json`, push the `v*` tag. Then add
+      a `"registryType": "pypi"` package to `server.json` beside the OCI one
 - [ ] Real-time search (`/v1/flight_search` + `/v1/flight_search_results`, MD5
       signature, separate product needing approval). This is the only way to drop
       the "prices are a 48h cache" caveat the whole `price_note` machinery exists

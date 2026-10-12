@@ -55,9 +55,10 @@ lets the process start; it surfaces as an error on the first search.
 that variable and its `-e` pair if you do not need it.
 
 `:latest` follows releases; pin a version tag (`:0.5.1`) if you would rather
-upgrade by hand. The package is PyPI-ready, and it is not on PyPI: `uvx
-aviasales-mcp` does nothing useful until a release is uploaded. Until then
-the command above is the install path.
+upgrade by hand. The package is not on PyPI yet: the release workflow is
+ready, and the first upload waits for the maintainer to register the project on
+PyPI. Until then `uvx aviasales-mcp` finds nothing and the command above is the
+install path.
 
 ## MCP client configs
 
@@ -137,12 +138,13 @@ One click, without editing JSON: download the `.mcpb` from
 https://github.com/stufently/aviasales-mcp/releases/latest and open it.
 Claude Desktop installs the extension and asks for the Travelpayouts API token.
 
-The same release includes `checksums.txt`, the SHA256 of every `.mcpb`.
-Download it into the same directory as the bundle and check it before opening
-the bundle:
+The same release includes `checksums.txt`, the SHA256 of every file attached
+to it: the `.mcpb`, and from the first PyPI release on also the sdist and the
+wheel, byte for byte the files uploaded to PyPI. Download it into the same
+directory as the bundle and check it before opening the bundle:
 
 ```bash
-sha256sum -c --ignore-missing checksums.txt   # run next to the downloaded .mcpb
+sha256sum -c --ignore-missing checksums.txt   # run next to the downloaded files
 ```
 
 On macOS, `shasum -a 256 -c` checks the same file.
@@ -255,7 +257,29 @@ server is also listed in the official MCP registry as
 `io.github.stufently/aviasales-mcp`, which clients with a registry browser can
 install from directly.
 
+## Verified clients and OS
+
+Only what was actually run is marked verified. Everything else is a config
+written from the client's documentation and has not been tried.
+
+| Client or path | OS | Status | How |
+|----------------|----|--------|-----|
+| Test suite, Python 3.12 / 3.13 / 3.14 | Linux (GitHub `ubuntu-latest`) | Verified on every PR and push to `main` | `ci.yml`; HTTP is mocked |
+| Docker runtime image build | Linux (GitHub `ubuntu-latest`) | Verified on every PR and push to `main` | `ci.yml` |
+| Plain MCP over stdio (`initialize`, `tools/list`) with the Docker image | Linux x86_64 | Verified 2026-10-12 | 13 tools listed, every one `readOnlyHint: true`, `destructiveHint: false` |
+| Claude Code 2.1.296, Docker command from this README | Linux x86_64 | Verified 2026-10-12: connects and lists all 13 tools | A placeholder token; no tool call reached the API in this check |
+| `uv run` launch used by the `.mcpb` | Linux, `ghcr.io/astral-sh/uv` image | Verified 2026-10-10: starts and answers `tools/list` | Without Claude Desktop |
+| Travelpayouts Data API with a real token | Linux | Verified 2026-07-29 (live probe of the Data API endpoints) | See CHANGELOG |
+| Claude Desktop (`.mcpb` or JSON config) | macOS, Windows, Linux | **Not verified** | No Claude Desktop on the test host |
+| Cursor, Windsurf, Zed, Codex | any | **Not verified** | Configs follow each client's docs as of 2026-10-10 |
+| Any client on macOS or Windows | macOS, Windows | **Not verified** | |
+| `pip install` / `uvx` from PyPI | any | **Not verified** | Not on PyPI yet |
+
 ## Tools
+
+All thirteen tools only read: they search cached fares and reference data. None
+books, buys, writes or changes anything, and none costs money to call beyond
+the Travelpayouts rate limit, so there is no separate read-only mode to turn on.
 
 ### Flight prices
 
@@ -407,6 +431,16 @@ docker run --rm -v "$(pwd)":/app -w /app aviasales-mcp-dev ruff check src/ tests
 CI runs the suite on Python 3.12, 3.13 and 3.14 plus a Docker image build — see
 `.github/workflows/ci.yml`.
 
+## Releasing
+
+Pushing a `v*` tag runs `.github/workflows/release.yml`: the CI suite, then an
+sdist and a wheel checked against the tag version and `twine check`, an upload
+to PyPI through Trusted Publishing (no token stored anywhere), and finally the
+GitHub Release with the sdist, wheel, `.mcpb` and `checksums.txt`.
+`registry.yml` publishes the image and the MCP registry entry from the same tag.
+`version` in `pyproject.toml` and `server.json` must match the tag.
+
 ## License
 
-GPL-3.0-or-later — see [LICENSE](LICENSE).
+GPL-3.0-or-later — see
+[LICENSE](https://github.com/stufently/aviasales-mcp/blob/main/LICENSE).

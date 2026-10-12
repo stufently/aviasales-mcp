@@ -72,6 +72,18 @@ Changelog = "https://github.com/stufently/aviasales-mcp/blob/main/CHANGELOG.md"
 [tool.hatch.build.targets.wheel]
 packages = ["src/aviasales_mcp"]
 
+# Without this the sdist is the whole checkout: agent notes, specs, CI files.
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/SECURITY.md",
+    "/LICENSE",
+    "/pyproject.toml",
+]
+
 [tool.ruff]
 target-version = "py312"
 line-length = 100
