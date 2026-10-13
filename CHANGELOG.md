@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Added
+
+- **`server.json` lists the PyPI package** (`registryType: pypi`,
+  `aviasales-mcp`, run with `uvx`) next to the OCI image, with the same
+  environment variables. The MCP registry picks it up with the next release;
+  `mcp-publisher validate` accepts the file
+
 ## 0.5.2 — 2026-10-12
 
 ### Added
