@@ -41,6 +41,39 @@
           "isRequired": false
         }
       ]
+    },
+    {
+      "registryType": "pypi",
+      "identifier": "aviasales-mcp",
+      "version": "0.5.2",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "AVIASALES_API_TOKEN",
+          "description": "Travelpayouts API token (https://www.travelpayouts.com/programs/100/tools/api)",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "AVIASALES_MARKET",
+          "description": "2-letter market whose price cache to read; unset falls back to ru",
+          "isRequired": false
+        },
+        {
+          "name": "AVIASALES_DEFAULT_CURRENCY",
+          "description": "Default price currency",
+          "isRequired": false,
+          "default": "rub"
+        },
+        {
+          "name": "AVIASALES_PARTNER_ID",
+          "description": "Travelpayouts partner ID embedded in booking links",
+          "isRequired": false
+        }
+      ]
     }
   ]
 }
