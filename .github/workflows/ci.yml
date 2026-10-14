@@ -50,6 +50,24 @@ jobs:
       - name: Build runtime image
         run: docker build --target runtime -t aviasales-mcp .
 
+      # What Glama and other directories do with the image: start it with no
+      # token and no network, then list the tools over stdio.
+      - name: Runtime image answers tools/list with no token and no network
+        run: |
+          name="aviasales-smoke-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          trap 'docker rm -f "$name" >/dev/null 2>&1 || true' EXIT
+          {
+            printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci-smoke","version":"0"}}}'
+            printf '%s\n' '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+            printf '%s\n' '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+            sleep 10
+          } | timeout 60 docker run --name "$name" -i --network none aviasales-mcp > smoke.jsonl
+          jq -c 'select(.id == 2) | [.result.tools[].name]' smoke.jsonl
+          jq -e 'select(.id == 1) | .result.serverInfo.name == "Aviasales"' smoke.jsonl
+          count=$(jq -r 'select(.id == 2) | .result.tools | length' smoke.jsonl)
+          echo "tools: $count"
+          [ "$count" = 13 ] || { echo "::error::expected 13 tools, got '$count'"; exit 1; }
+
       - name: Build dev image and run the suite inside it
         run: docker build --target dev -t aviasales-mcp-dev .
 
