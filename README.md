@@ -56,10 +56,19 @@ surfaces as an error on the first search.
 that variable and its `-e` pair if you do not need it.
 
 `:latest` follows releases; pin a version tag (`:0.5.3`) if you would rather
-upgrade by hand. The package is not on PyPI yet: the release workflow is
-ready, and the first upload waits for the maintainer to register the project on
-PyPI. Until then `uvx aviasales-mcp` finds nothing and the command above is the
-install path.
+upgrade by hand.
+
+Without Docker, the same server is on PyPI as
+[`aviasales-mcp`](https://pypi.org/project/aviasales-mcp/) (Python 3.12+).
+[`uvx`](https://docs.astral.sh/uv/) fetches and runs it in one step:
+
+```bash
+AVIASALES_API_TOKEN=your-token-here AVIASALES_MARKET=ru uvx aviasales-mcp
+```
+
+`pip install aviasales-mcp` puts the same `aviasales-mcp` command on your PATH.
+In a client config, use `"command": "uvx", "args": ["aviasales-mcp"]` with the
+token in `env` instead of the `docker` command in the blocks below.
 
 ## MCP client configs
 
@@ -274,7 +283,7 @@ written from the client's documentation and has not been tried.
 | Claude Desktop (`.mcpb` or JSON config) | macOS, Windows, Linux | **Not verified** | No Claude Desktop on the test host |
 | Cursor, Windsurf, Zed, Codex | any | **Not verified** | Configs follow each client's docs as of 2026-10-10 |
 | Any client on macOS or Windows | macOS, Windows | **Not verified** | |
-| `pip install` / `uvx` from PyPI | any | **Not verified** | Not on PyPI yet |
+| `uvx aviasales-mcp@0.5.3` from PyPI over stdio (`initialize`, `tools/list`) | Linux, `ghcr.io/astral-sh/uv` image | Verified 2026-10-14: 13 tools listed | A placeholder token; no tool call reached the API |
 
 ## Tools
 

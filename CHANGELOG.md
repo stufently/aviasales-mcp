@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Added
+
+- **Provenance for the GHCR image.** registry.yml attests the image it builds
+  with `actions/attest` and pushes the attestation next to it; check it with
+  `gh attestation verify oci://ghcr.io/stufently/aviasales-mcp:<version> --repo stufently/aviasales-mcp`.
+  Images up to 0.5.3 carry none
+
+### Fixed
+
+- **MCP registry publish no longer races the PyPI upload.** On v0.5.3 the
+  registry rejected the listing because registry.yml ran before release.yml
+  had put the version on PyPI. It now waits up to 10 minutes for
+  `pypi.org/pypi/aviasales-mcp/<version>/json` before publishing
+- **README install section** no longer says the package is not on PyPI; it
+  shows `uvx aviasales-mcp` and `pip install aviasales-mcp`
+
 ## 0.5.3 — 2026-10-14
 
 ### Added
