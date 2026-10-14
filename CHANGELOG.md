@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.5.3 — 2026-10-14
+
 ### Added
 
 - **`server.json` lists the PyPI package** (`registryType: pypi`,

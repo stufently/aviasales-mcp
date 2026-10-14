@@ -50,11 +50,12 @@ AVIASALES_API_TOKEN=your-token-here AVIASALES_MARKET=ru \
 
 You need Docker, and a free Travelpayouts API token from
 <https://www.travelpayouts.com/programs/100/tools/api>. A wrong token still
-lets the process start; it surfaces as an error on the first search.
+lets the process start (so does no token at all in the Docker image); it
+surfaces as an error on the first search.
 `AVIASALES_MARKET` is optional — see [Configuration](#configuration). Drop
 that variable and its `-e` pair if you do not need it.
 
-`:latest` follows releases; pin a version tag (`:0.5.2`) if you would rather
+`:latest` follows releases; pin a version tag (`:0.5.3`) if you would rather
 upgrade by hand. The package is not on PyPI yet: the release workflow is
 ready, and the first upload waits for the maintainer to register the project on
 PyPI. Until then `uvx aviasales-mcp` finds nothing and the command above is the
