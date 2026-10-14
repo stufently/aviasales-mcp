@@ -26,4 +26,11 @@ LABEL io.modelcontextprotocol.server.name="io.github.stufently/aviasales-mcp" \
       org.opencontainers.image.description="MCP server for Aviasales/Travelpayouts flight price search" \
       org.opencontainers.image.licenses="GPL-3.0-or-later"
 
+# Lets the image start with no token so directories (Glama, the MCP registry)
+# can run `initialize` and `tools/list` on it. Not a key: a tool call made with
+# it is refused by the API ("Unauthorized — check AVIASALES_API_TOKEN"). A real
+# `-e AVIASALES_API_TOKEN=...` overrides it. Runtime stage only, so the test
+# image still sees a missing token as missing.
+ENV AVIASALES_API_TOKEN=introspection-placeholder-not-a-key
+
 ENTRYPOINT ["aviasales-mcp"]

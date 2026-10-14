@@ -8,6 +8,22 @@
   `aviasales-mcp`, run with `uvx`) next to the OCI image, with the same
   environment variables. The MCP registry picks it up with the next release;
   `mcp-publisher validate` accepts the file
+- **Build provenance for every release file.** The release workflow signs
+  SLSA provenance for the sdist, the wheel and the `.mcpb` with
+  `actions/attest`; check a download with
+  `gh attestation verify <file> --repo stufently/aviasales-mcp`
+- **CI smoke test of the runtime image** with no token and `--network none`:
+  `initialize` and `tools/list` over stdio must list all 13 tools
+
+### Fixed
+
+- **The Docker image starts without `AVIASALES_API_TOKEN`.** Settings refused
+  to load with no token, so the container exited before `initialize` and
+  directories that introspect the image (Glama) could not list it. The
+  runtime stage now sets the placeholder `introspection-placeholder-not-a-key`;
+  a real `-e AVIASALES_API_TOKEN=...` overrides it, and a tool call made with
+  the placeholder fails with `Unauthorized — check AVIASALES_API_TOKEN`.
+  Installs from PyPI still require the token at start
 
 ## 0.5.2 — 2026-10-12
 
