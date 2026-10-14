@@ -32,6 +32,9 @@
 #   actions/upload-artifact        v7.0.2   -> cf430e030ddbb5b0abf93d22962f4752f3646cd9
 #   actions/download-artifact      v8.0.2   -> 9000827ccba6bdab643e8b6fd33ac0654aef8333
 #   pypa/gh-action-pypi-publish    v1.14.2  -> dc37677b2e1c63e2034f94d8a5b11f265b73ba33
+#   actions/attest                 v4.2.2   -> 1e69f48acb82d1966a394da916b4c1698aa569d6
+#     (resolved 2026-10-14; actions/attest-build-provenance v4 is now only a
+#     wrapper around it, and upstream points new workflows here)
 name: Release
 
 on:
@@ -59,6 +62,12 @@ jobs:
     name: Build sdist + wheel
     needs: tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Sigstore-signed SLSA provenance for the wheel and sdist: an OIDC token
+      # to sign with, and the right to store the attestation on this repo.
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -193,6 +202,18 @@ jobs:
           (cd dist && sha256sum -- *) > checksums/checksums.txt
           cat checksums/checksums.txt
 
+      # Provenance, verifiable with `gh attestation verify <file> --repo
+      # stufently/aviasales-mcp`: it ties each archive's digest to this
+      # workflow, this commit and this tag. Made before the upload, so whatever
+      # reaches PyPI and the release is exactly what was attested.
+      # create-storage-record is off: storage records exist for organization-
+      # owned repositories only, and this one is not.
+      - name: Attest build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist/*
+          create-storage-record: false
+
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist
@@ -210,12 +231,21 @@ jobs:
     name: Build Desktop Extension
     needs: tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Build mcpb bundle
         run: bash scripts/build-mcpb.sh
+      - name: Attest build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: dist-mcpb/*.mcpb
+          create-storage-record: false
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mcpb
