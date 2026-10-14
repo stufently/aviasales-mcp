@@ -11,6 +11,17 @@ name: MCP Registry
 # never overwritten, and a version the registry already lists is skipped — so a
 # re-run, or a tag pushed after a manual run, does not fail or rewrite history.
 # A new version needs `version` bumped in pyproject.toml and server.json together.
+#
+# server.json also lists the PyPI package, and the registry rejects a version
+# PyPI does not have yet. release.yml uploads it on the same tag, in parallel
+# with this run, so publishing waits until PyPI serves the tagged version.
+#
+# An image this run builds gets a Sigstore-signed SLSA provenance attestation,
+# pushed to GHCR next to it:
+#   gh attestation verify oci://ghcr.io/stufently/aviasales-mcp:<version> \
+#     --repo stufently/aviasales-mcp
+# actions/attest v4.2.2 -> 1e69f48acb82d1966a394da916b4c1698aa569d6, resolved
+# from the tag on 2026-10-14, the same pin as release.yml.
 on:
   workflow_dispatch:
   push:
@@ -19,7 +30,9 @@ on:
 permissions:
   contents: read
   packages: write
+  # OIDC for the registry login and for Sigstore signing the attestation.
   id-token: write
+  attestations: write
 
 concurrency:
   group: registry
@@ -30,6 +43,7 @@ env:
   SERVER_NAME: io.github.stufently/aviasales-mcp
   PUBLISHER_VERSION: "1.8.1"
   PUBLISHER_SHA256: "a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc"
+  PACKAGE: aviasales-mcp
 
 jobs:
   publish:
@@ -62,6 +76,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push image unless the tag exists
+        id: build
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
@@ -80,6 +95,30 @@ jobs:
           docker build --target runtime -t "$IMAGE:$VERSION" -t "$IMAGE:latest" .
           docker push "$IMAGE:$VERSION"
           docker push "$IMAGE:latest"
+          echo "built=true" >> "$GITHUB_OUTPUT"
+
+      # Read back from the registry, not from the local build, so the
+      # attestation names the digest clients pull. Only an image this run
+      # built is attested: one found already pushed came from another run.
+      - name: Resolve the pushed image digest
+        id: image
+        if: steps.build.outputs.built == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          digest=$(docker buildx imagetools inspect "$IMAGE:$VERSION" --format '{{json .Manifest}}' | jq -r '.digest')
+          case "$digest" in
+            sha256:*) echo "digest=$digest" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::no digest for $IMAGE:$VERSION: $digest"; exit 1 ;;
+          esac
+
+      - name: Attest the image
+        if: steps.build.outputs.built == 'true'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.image.outputs.digest }}
+          push-to-registry: true
 
       - name: Check the image is publicly pullable
         env:
@@ -106,6 +145,24 @@ jobs:
             404) echo "listed=false" >> "$GITHUB_OUTPUT" ;;
             *) echo "::error::registry answered $code for $url"; exit 1 ;;
           esac
+
+      # release.yml takes about two minutes from the tag to the upload (tests,
+      # build, publish). Ten minutes covers a slow runner queue; a longer gap
+      # means the release failed, and that run is where to look.
+      - name: Wait for the version on PyPI
+        if: steps.listed.outputs.listed == 'false'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          url="https://pypi.org/pypi/$PACKAGE/$VERSION/json"
+          for _ in $(seq 1 20); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' "$url" || true)
+            if [ "$code" = 200 ]; then echo "$PACKAGE $VERSION is on PyPI"; exit 0; fi
+            [ "$code" = 404 ] || echo "PyPI answered ${code:-nothing}"
+            sleep 30
+          done
+          echo "::error::$PACKAGE $VERSION did not appear on PyPI within 10 minutes; check the Release workflow run for this tag"
+          exit 1
 
       - name: Install mcp-publisher
         if: steps.listed.outputs.listed == 'false'
