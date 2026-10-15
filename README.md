@@ -165,6 +165,10 @@ the server fails to start, replace `"docker"` with its absolute path
 
 ### Cursor
 
+[![Add aviasales MCP server to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=aviasales&config=eyJjb21tYW5kIjoiZG9ja2VyIiwiYXJncyI6WyJydW4iLCItaSIsIi0tcm0iLCItZSIsIkFWSUFTQUxFU19BUElfVE9LRU4iLCItZSIsIkFWSUFTQUxFU19NQVJLRVQiLCJnaGNyLmlvL3N0dWZlbnRseS9hdmlhc2FsZXMtbWNwOmxhdGVzdCJdLCJlbnYiOnsiQVZJQVNBTEVTX0FQSV9UT0tFTiI6InlvdXItdG9rZW4taGVyZSIsIkFWSUFTQUxFU19NQVJLRVQiOiJydSJ9fQ%3D%3D)
+
+After installing, put your token in place of `your-token-here` in `~/.cursor/mcp.json`. Or add the block below by hand.
+
 File: `~/.cursor/mcp.json` (every project) or `.cursor/mcp.json` (this project).
 
 ```json
