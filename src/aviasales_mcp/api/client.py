@@ -136,9 +136,14 @@ async def _request(
             await _backoff(attempt, "timeout")
             continue
         except httpx.HTTPError as exc:
+            # The exception text is logged, not returned: httpx quotes the
+            # offending header value in some of its errors, and one of those
+            # headers is the API token.
+            reason = f"connection error ({type(exc).__name__})"
+            logger.warning("%s: %s", reason, exc)
             if final_attempt:
-                raise ApiError(f"Connection error: {exc}")
-            await _backoff(attempt, f"connection error: {exc}")
+                raise ApiError(f"Connection error: {type(exc).__name__}")
+            await _backoff(attempt, reason)
             continue
 
         _log_quota(resp)
@@ -170,7 +175,9 @@ async def _request(
             raise ApiError("API returned a non-JSON response")
 
         if isinstance(data, dict) and data.get("success") is False:
-            raise ApiError(f"API error: {data.get('error', 'unknown error')}")
+            # Upstream text of any shape and length, bounded before it reaches
+            # the model's context.
+            raise ApiError(f"API error: {str(data.get('error') or 'unknown error')[:300]}")
 
         return data
 

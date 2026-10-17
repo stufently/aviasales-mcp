@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+### Security
+
+- **HTTP transport checks `Host` and `Origin`.** fastmcp 3.x does not enable
+  the MCP SDK's DNS-rebinding protection, so a web page could rebind its name
+  to `127.0.0.1` and drive a loopback server's tools from a browser (verified:
+  `Host: evil.example` was answered). A loopback bind now answers only to the
+  loopback names plus `MCP_ALLOWED_HOSTS` (421 otherwise); any bind refuses a
+  foreign `Origin` (403). New setting `MCP_ALLOWED_HOSTS`
+- **The API token can no longer leak through an error message.** A token
+  with a trailing newline made httpx raise `Illegal header value b'<token>'`,
+  and that text was returned to the model as the tool's `error`. Connection
+  errors now report the exception class only (the text goes to the log), the
+  token is stripped and refused at startup if it carries whitespace or
+  non-ASCII, and pydantic no longer quotes rejected input in its errors
+- **`.env` is not read from the working directory.** MCP clients start a stdio
+  server with the open project as cwd, so a foreign repository's `.env` could
+  set `AVIASALES_PARTNER_ID` (redirecting the booking-link marker), or
+  `MCP_PORT`/`MCP_HOST`/`MCP_ALLOW_INSECURE_HTTP` (verified: both took effect).
+  A dotenv file is now read only from `AVIASALES_ENV_FILE`. **Migration:** a
+  local run that relied on `./.env` needs `AVIASALES_ENV_FILE=.env`;
+  `docker run --env-file .env` is unchanged
+- **A booking link cannot leave `www.aviasales.ru`.** An API row whose `link`
+  did not start with `/` was joined as-is, so `@evil.example/…` became
+  `https://www.aviasales.ru@evil.example/…`. Such rows now get no link, and
+  route codes rebuilt into links must be three letters
+- **Upstream error text is bounded** to 300 characters and stringified before
+  it reaches the model
+
+### Changed
+
+- `TokenAuthMiddleware` is a plain ASGI middleware rather than a
+  `BaseHTTPMiddleware`, so SSE responses are no longer run through a
+  buffering wrapper
+
 ### Added
 
 - **Provenance for the GHCR image.** registry.yml attests the image it builds

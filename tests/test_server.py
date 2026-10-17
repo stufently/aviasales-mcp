@@ -6,7 +6,7 @@ from pydantic import SecretStr
 
 from aviasales_mcp import server
 from aviasales_mcp.api import client as api_client
-from aviasales_mcp.auth import TokenAuthMiddleware
+from aviasales_mcp.auth import HostOriginMiddleware, TokenAuthMiddleware
 
 
 @pytest.fixture
@@ -29,10 +29,17 @@ def test_defaults_to_stdio(monkeypatch, run_kwargs):
     assert run_kwargs == {"transport": "stdio"}
 
 
+def _by_class(middleware, cls):
+    found = [m for m in middleware if m.cls is cls]
+    assert len(found) == 1, [m.cls for m in middleware]
+    return found[0]
+
+
 def test_serves_http_with_auth_when_token_is_set(monkeypatch, run_kwargs):
     monkeypatch.setattr(server.settings, "mcp_port", 8080)
     monkeypatch.setattr(server.settings, "mcp_host", "0.0.0.0")
     monkeypatch.setattr(server.settings, "mcp_auth_token", SecretStr("s3cret"))
+    monkeypatch.setattr(server.settings, "mcp_allowed_hosts", "")
 
     server.main()
 
@@ -40,9 +47,11 @@ def test_serves_http_with_auth_when_token_is_set(monkeypatch, run_kwargs):
     assert run_kwargs["host"] == "0.0.0.0"
     assert run_kwargs["port"] == 8080
     middleware = run_kwargs["middleware"]
-    assert len(middleware) == 1
-    assert middleware[0].cls is TokenAuthMiddleware
-    assert middleware[0].kwargs["allow_query_token"] is False
+    # A public bind with no MCP_ALLOWED_HOSTS sits behind a proxy whose name
+    # we do not know: Host goes unchecked, but Origin is still refused.
+    assert [m.cls for m in middleware] == [HostOriginMiddleware, TokenAuthMiddleware]
+    assert middleware[0].kwargs == {"allowed_hosts": [], "check_host": False}
+    assert middleware[1].kwargs["allow_query_token"] is False
 
 
 def test_query_token_can_be_opted_into(monkeypatch, run_kwargs):
@@ -52,7 +61,42 @@ def test_query_token_can_be_opted_into(monkeypatch, run_kwargs):
 
     server.main()
 
-    assert run_kwargs["middleware"][0].kwargs["allow_query_token"] is True
+    auth = _by_class(run_kwargs["middleware"], TokenAuthMiddleware)
+    assert auth.kwargs["allow_query_token"] is True
+
+
+def test_loopback_bind_checks_host_and_origin_before_the_token(monkeypatch, run_kwargs):
+    monkeypatch.setattr(server.settings, "mcp_port", 8080)
+    monkeypatch.setattr(server.settings, "mcp_host", "127.0.0.1")
+    monkeypatch.setattr(server.settings, "mcp_auth_token", SecretStr("s3cret"))
+    # A local reverse proxy forwards its public name; it joins the loopback ones.
+    monkeypatch.setattr(server.settings, "mcp_allowed_hosts", "mcp.example.com")
+
+    server.main()
+
+    middleware = run_kwargs["middleware"]
+    assert [m.cls for m in middleware] == [HostOriginMiddleware, TokenAuthMiddleware]
+    assert set(middleware[0].kwargs["allowed_hosts"]) == {
+        "127.0.0.1",
+        "::1",
+        "localhost",
+        "mcp.example.com",
+    }
+    assert middleware[0].kwargs["check_host"] is True
+
+
+def test_public_bind_checks_the_configured_hosts(monkeypatch, run_kwargs):
+    monkeypatch.setattr(server.settings, "mcp_port", 8080)
+    monkeypatch.setattr(server.settings, "mcp_host", "0.0.0.0")
+    monkeypatch.setattr(server.settings, "mcp_auth_token", SecretStr("s3cret"))
+    monkeypatch.setattr(server.settings, "mcp_allowed_hosts", "mcp.example.com, Alt.Example.com")
+
+    server.main()
+
+    middleware = run_kwargs["middleware"]
+    assert [m.cls for m in middleware] == [HostOriginMiddleware, TokenAuthMiddleware]
+    assert middleware[0].kwargs["allowed_hosts"] == ["mcp.example.com", "alt.example.com"]
+    assert middleware[0].kwargs["check_host"] is True
 
 
 def test_loopback_without_token_starts_but_warns(monkeypatch, run_kwargs, caplog):
@@ -63,7 +107,9 @@ def test_loopback_without_token_starts_but_warns(monkeypatch, run_kwargs, caplog
     with caplog.at_level(logging.WARNING, logger=server.logger.name):
         server.main()
 
-    assert run_kwargs["middleware"] is None
+    # No token, but the Host/Origin guard still stands: without it a web page
+    # could rebind its DNS name to 127.0.0.1 and drive the tools.
+    assert [m.cls for m in run_kwargs["middleware"]] == [HostOriginMiddleware]
     assert "MCP_AUTH_TOKEN" in caplog.text
 
 
@@ -84,12 +130,15 @@ def test_public_bind_without_token_can_be_forced(monkeypatch, run_kwargs, caplog
     monkeypatch.setattr(server.settings, "mcp_host", "0.0.0.0")
     monkeypatch.setattr(server.settings, "mcp_auth_token", None)
     monkeypatch.setattr(server.settings, "mcp_allow_insecure_http", True)
+    monkeypatch.setattr(server.settings, "mcp_allowed_hosts", "")
 
     with caplog.at_level(logging.WARNING, logger=server.logger.name):
         server.main()
 
     assert run_kwargs["transport"] == "streamable-http"
-    assert run_kwargs["middleware"] is None
+    # Forced open, but a browser-originated request is still turned away.
+    assert [m.cls for m in run_kwargs["middleware"]] == [HostOriginMiddleware]
+    assert run_kwargs["middleware"][0].kwargs["check_host"] is False
 
 
 @pytest.mark.asyncio
