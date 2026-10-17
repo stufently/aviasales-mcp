@@ -11,9 +11,9 @@ response, which does not sit well with the SSE streams the MCP transport sends.
 from __future__ import annotations
 
 import hmac
+import re
 from collections.abc import Iterable
 from typing import Any
-from urllib.parse import urlsplit
 
 from starlette.datastructures import Headers
 from starlette.requests import HTTPConnection
@@ -31,14 +31,22 @@ async def _reject(response: Response, scope: Scope, receive: Receive, send: Send
     await response(scope, receive, send)
 
 
-def _hostname(url: str | None) -> str:
-    """Lower-cased host of a URL, port and IPv6 brackets removed; "" if unparseable."""
-    if not url:
+# `host[:port]` as RFC 7230 allows it: a name or IPv4, or a bracketed IPv6.
+# Matched rather than parsed with urlsplit, which accepts userinfo and other
+# junk ("evil.example@localhost" would come back as "localhost").
+_HOST_PORT = r"(?:(?P<name>[a-z0-9.-]+)|\[(?P<ipv6>[0-9a-f:.]+)\])(?::\d{1,5})?"
+_HOST_RE = re.compile(rf"^{_HOST_PORT}$", re.IGNORECASE)
+# A browser's Origin is exactly scheme://host[:port]; "null" and anything else
+# is not one of ours.
+_ORIGIN_RE = re.compile(rf"^https?://{_HOST_PORT}$", re.IGNORECASE)
+
+
+def _hostname(value: str | None, pattern: re.Pattern[str]) -> str:
+    """Lower-cased host of a ``Host`` header or an ``Origin``; "" if it is malformed."""
+    m = pattern.match(value or "")
+    if m is None:
         return ""
-    try:
-        return urlsplit(url).hostname or ""
-    except ValueError:
-        return ""
+    return (m.group("name") or m.group("ipv6")).lower()
 
 
 class HostOriginMiddleware:
@@ -63,12 +71,12 @@ class HostOriginMiddleware:
 
     def _rejection(self, scope: Scope) -> PlainTextResponse | None:
         headers = Headers(scope=scope)
-        host = headers.get("host")
-        if self._check_host and _hostname(f"//{host}" if host else None) not in self._allowed:
+        if self._check_host and _hostname(headers.get("host"), _HOST_RE) not in self._allowed:
             return PlainTextResponse("Invalid Host header", status_code=421)
-        origin = headers.get("origin")
-        if origin is not None and _hostname(origin) not in self._allowed:
-            return PlainTextResponse("Invalid Origin header", status_code=403)
+        # Every Origin sent, not just the first: a second one must not slip by.
+        for origin in headers.getlist("origin"):
+            if _hostname(origin, _ORIGIN_RE) not in self._allowed:
+                return PlainTextResponse("Invalid Origin header", status_code=403)
         return None
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:

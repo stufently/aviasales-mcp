@@ -1,6 +1,9 @@
 """Settings hygiene: what a token may contain, and where configuration may come from."""
 
 import importlib
+import os
+import subprocess
+import sys
 
 import pytest
 
@@ -11,7 +14,7 @@ from aviasales_mcp.config import Settings
 @pytest.fixture
 def clean_env(monkeypatch):
     """Only the one required variable, nothing inherited from the host."""
-    for name in list(__import__("os").environ):
+    for name in list(os.environ):
         if name.startswith(("AVIASALES_", "MCP_")) or name == "PORT":
             monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("AVIASALES_API_TOKEN", "clean-token")
@@ -106,3 +109,25 @@ def test_dotenv_is_read_when_named_explicitly(clean_env, tmp_path):
     finally:
         clean_env.delenv("AVIASALES_ENV_FILE")
         importlib.reload(config)
+
+
+def test_fastmcp_does_not_read_dotenv_from_the_working_directory(tmp_path):
+    # fastmcp has its own settings and its own `.env` habit. A foreign file
+    # that expands the token into a FASTMCP_* value used to print the token in
+    # the startup traceback. A fresh interpreter, because fastmcp is imported
+    # once per process.
+    (tmp_path / ".env").write_text("FASTMCP_PORT=${AVIASALES_API_TOKEN}\n")
+    env = {k: v for k, v in os.environ.items() if not k.startswith("FASTMCP_")}
+    env["AVIASALES_API_TOKEN"] = "SECRET-abc123"
+
+    run = subprocess.run(
+        [sys.executable, "-c", "import aviasales_mcp.server"],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert run.returncode == 0, run.stderr[-500:]
+    assert "SECRET-abc123" not in run.stderr

@@ -238,7 +238,17 @@ async def test_loopback_hosts_are_served(host):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "host", ["evil.example", "evil.example:8080", "127.0.0.1.evil.example", "", "[::1"]
+    "host",
+    [
+        "evil.example",
+        "evil.example:8080",
+        "127.0.0.1.evil.example",
+        "",
+        "[::1",
+        "evil.example@localhost",
+        "localhost/",
+        "localhost:8080:1",
+    ],
 )
 async def test_foreign_host_is_refused(host):
     # A DNS-rebound page reaches 127.0.0.1 but still says who it thinks it is.
@@ -266,6 +276,10 @@ async def test_missing_host_header_is_refused():
         "http://127.0.0.1.evil.example",
         "http://[::1",
         "",
+        "//localhost",
+        "http://evil.example@localhost",
+        "http://localhost/",
+        "ftp://localhost",
     ],
 )
 async def test_foreign_origin_is_refused(origin):
@@ -278,6 +292,17 @@ async def test_foreign_origin_is_refused(origin):
 async def test_loopback_origin_is_served(origin):
     resp = await _post({"Host": "127.0.0.1:8080", "Origin": origin})
     assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_a_second_foreign_origin_header_is_refused():
+    transport = httpx.ASGITransport(app=_host_app())
+    async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1") as client:
+        headers = httpx.Headers(
+            [("Host", "127.0.0.1"), ("Origin", "http://localhost"), ("Origin", "http://evil.example")]
+        )
+        resp = await client.post("/mcp", headers=headers)
+    assert resp.status_code == 403
 
 
 @pytest.mark.asyncio

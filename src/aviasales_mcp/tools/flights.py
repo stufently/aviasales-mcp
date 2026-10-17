@@ -102,7 +102,9 @@ def _build_booking_link(link_fragment: str, passenger_block: str = "1") -> str:
     # single "/" would change the host rather than the path: "@evil.example/…"
     # becomes "https://www.aviasales.ru@evil.example/…", ".evil.example/…" a
     # subdomain of the attacker's. Not a flight link, so not a link at all.
-    if not link_fragment.startswith("/") or link_fragment[1:2] in ("/", "\\"):
+    if not isinstance(link_fragment, str) or not link_fragment.startswith("/"):
+        return ""
+    if link_fragment[1:2] in ("/", "\\"):
         return ""
     m = _SEARCH_LINK_RE.match(link_fragment)
     if m:

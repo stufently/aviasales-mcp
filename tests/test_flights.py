@@ -99,6 +99,12 @@ def test_booking_link_refuses_a_fragment_that_would_change_the_host(fragment):
     assert _build_booking_link(fragment, "2") == ""
 
 
+@pytest.mark.parametrize("fragment", [None, "", 0])
+def test_booking_link_without_a_fragment_is_empty_not_an_error(fragment):
+    # `link: null` in one API row must not take the whole response down.
+    assert _build_booking_link(fragment, "2") == ""
+
+
 @pytest.mark.parametrize("origin", ["MOW@EVIL.COM/", "", "MO", "MOWW", "M-W"])
 def test_route_link_refuses_codes_that_are_not_iata(origin):
     assert _route_booking_link(origin, "BKK", "2026-12-03", "", "1") == ""
