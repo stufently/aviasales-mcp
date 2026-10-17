@@ -382,14 +382,22 @@ docker run --env-file .env aviasales-mcp
 | `AVIASALES_MARKET` | No | 2-letter market whose price cache to read (unset → `ru`) |
 | `AVIASALES_LOCALE` | No | Language of reference data names (default: `en`) |
 | `LOG_LEVEL` | No | Logging level (default: INFO) |
+| `AVIASALES_ENV_FILE` | No | Path of a dotenv file to read. Unset, no `.env` is read (see below) |
 | `MCP_PORT` | No | Serve streamable-HTTP on this port instead of stdio (`PORT` also accepted) |
 | `MCP_HOST` | No | Bind address for HTTP mode (default: `127.0.0.1`; use `0.0.0.0` in Docker) |
 | `MCP_AUTH_TOKEN` | No | Shared secret required on every HTTP request |
 | `MCP_AUTH_ALLOW_QUERY_TOKEN` | No | Also accept the token as `?token=` (default: false) |
 | `MCP_ALLOW_INSECURE_HTTP` | No | Permit a non-loopback bind with no token (default: false) |
+| `MCP_ALLOWED_HOSTS` | No | Comma-separated host names the HTTP transport answers for |
 
 `AVIASALES_MARKET` is worth setting: the price cache is per market, and the same
 route in the same currency comes back at a different price for `ru` and `us`.
+
+Settings come from the process environment. A `.env` in the working directory is
+**not** read: MCP clients start a stdio server with the open project as its working
+directory, and a stranger's `.env` there could change the partner ID or the
+transport. To use a dotenv file, name it: `AVIASALES_ENV_FILE=/path/to/.env`.
+(`docker run --env-file .env` is unaffected — Docker reads the file, not the server.)
 
 ## HTTP transport
 
@@ -417,6 +425,13 @@ Without `MCP_AUTH_TOKEN` the port is unauthenticated and anyone who reaches it
 can spend your Travelpayouts quota. Loopback binds are allowed (with a warning);
 binding anything else refuses to start unless you also set
 `MCP_ALLOW_INSECURE_HTTP=true`.
+
+The `Host` and `Origin` headers are checked so a web page cannot reach a loopback
+server by rebinding its DNS name to `127.0.0.1`. A loopback bind answers to
+`127.0.0.1`, `localhost` and `::1`; put a reverse proxy's public name in
+`MCP_ALLOWED_HOSTS` to add it. Bound elsewhere, the server answers to the names in
+`MCP_ALLOWED_HOSTS`; leave it unset behind a proxy whose name you do not control,
+and only requests carrying an `Origin` header (browsers) are refused.
 
 ## Limitations
 

@@ -11,7 +11,7 @@ from fastmcp import FastMCP
 from starlette.middleware import Middleware
 
 from aviasales_mcp.api import client as api_client
-from aviasales_mcp.auth import TokenAuthMiddleware
+from aviasales_mcp.auth import HostOriginMiddleware, TokenAuthMiddleware
 from aviasales_mcp.config import settings
 from aviasales_mcp.tools.flights import (
     get_alternative_directions,
@@ -99,24 +99,40 @@ for _tool in _TOOLS:
 _LOOPBACK_HOSTS = {"127.0.0.1", "::1", "localhost"}
 
 
-def main() -> None:
-    port = settings.mcp_port
-    if port is None:
-        mcp.run(transport="stdio")
-        return
-
+def _http_middleware() -> list[Middleware]:
+    """Request guards for the HTTP transport, outermost first."""
     host = settings.mcp_host
+    port = settings.mcp_port
     token = settings.mcp_auth_token
+    middleware: list[Middleware] = []
 
-    middleware = None
+    # A loopback server is what a hostile web page can reach by rebinding its
+    # own DNS name to 127.0.0.1, so there the Host/Origin check is always on,
+    # with any configured names added for a local reverse proxy. Elsewhere the
+    # public name is whatever the proxy forwards: Host is checked only when
+    # MCP_ALLOWED_HOSTS says what to expect, Origin is checked regardless.
+    allowed = settings.allowed_hosts
+    if host in _LOOPBACK_HOSTS:
+        allowed = sorted(_LOOPBACK_HOSTS | set(allowed))
+    elif not allowed:
+        logger.info(
+            "MCP_ALLOWED_HOSTS is unset: the Host header is not checked on %s:%d, and any "
+            "request carrying an Origin header is refused",
+            host,
+            port,
+        )
+    middleware.append(
+        Middleware(HostOriginMiddleware, allowed_hosts=allowed, check_host=bool(allowed))
+    )
+
     if token:
-        middleware = [
+        middleware.append(
             Middleware(
                 TokenAuthMiddleware,
                 token=token.get_secret_value(),
                 allow_query_token=settings.mcp_auth_allow_query_token,
             )
-        ]
+        )
     elif host in _LOOPBACK_HOSTS or settings.mcp_allow_insecure_http:
         logger.warning(
             "Serving HTTP on %s:%d without MCP_AUTH_TOKEN — anyone who can reach this "
@@ -133,11 +149,19 @@ def main() -> None:
             "MCP_ALLOW_INSECURE_HTTP=true if this port is genuinely private."
         )
 
+    return middleware
+
+
+def main() -> None:
+    if settings.mcp_port is None:
+        mcp.run(transport="stdio")
+        return
+
     mcp.run(
         transport="streamable-http",
-        host=host,
-        port=port,
-        middleware=middleware,
+        host=settings.mcp_host,
+        port=settings.mcp_port,
+        middleware=_http_middleware(),
     )
 
 

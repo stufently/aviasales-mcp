@@ -26,6 +26,9 @@ _SEARCH_LINK_RE = re.compile(
     rf"(?:[{_CLASS_LETTERS}]?\d{{1,3}})(?P<query>\?.*)?$"
 )
 
+_BOOKING_HOST = "www.aviasales.ru"
+_IATA_RE = re.compile(r"[A-Za-z]{3}")
+
 _PRICE_NOTE = (
     "Prices are per adult in economy (cached). "
     "booking_link opens the search for the full party with the actual total."
@@ -95,7 +98,13 @@ def _passenger_block(adults: int, children: int, infants: int, trip_class: str) 
 
 def _build_booking_link(link_fragment: str, passenger_block: str = "1") -> str:
     """Build a full Aviasales booking link from a deep-link fragment."""
-    if not link_fragment:
+    # The fragment comes from the API row. Anything that does not start with a
+    # single "/" would change the host rather than the path: "@evil.example/…"
+    # becomes "https://www.aviasales.ru@evil.example/…", ".evil.example/…" a
+    # subdomain of the attacker's. Not a flight link, so not a link at all.
+    if not isinstance(link_fragment, str) or not link_fragment.startswith("/"):
+        return ""
+    if link_fragment[1:2] in ("/", "\\"):
         return ""
     m = _SEARCH_LINK_RE.match(link_fragment)
     if m:
@@ -108,7 +117,7 @@ def _build_booking_link(link_fragment: str, passenger_block: str = "1") -> str:
         params = [(k, v) for k, v in parse_qsl(query, keep_blank_values=True) if k != "marker"]
         params.append(("marker", partner_id))
         link_fragment = f"{path}?{urlencode(params)}"
-    return f"https://www.aviasales.ru{link_fragment}"
+    return f"https://{_BOOKING_HOST}{link_fragment}"
 
 
 def _route_booking_link(
@@ -126,6 +135,9 @@ def _route_booking_link(
     ``/search/`` + ORIGIN + DDMM + DEST [+ DDMM] + passenger block.
     """
     if not origin or not destination or not depart:
+        return ""
+    # Route codes come from the API row too, and they land in the link path.
+    if not _IATA_RE.fullmatch(origin) or not _IATA_RE.fullmatch(destination):
         return ""
     try:
         depart_ddmm = f"{datetime.fromisoformat(depart[:10]):%d%m}"

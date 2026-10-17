@@ -82,6 +82,40 @@ def test_booking_link_unrecognized_fragment_left_intact():
     assert "/search/WEIRD-FORMAT" in link
 
 
+@pytest.mark.parametrize(
+    "fragment",
+    [
+        "@evil.example/search/MOW1607IST1",
+        ".evil.example/search/MOW1607IST1",
+        "//evil.example/search/MOW1607IST1",
+        "/\\evil.example/search/MOW1607IST1",
+        "evil.example/search/MOW1607IST1",
+        "https://evil.example/search/MOW1607IST1",
+    ],
+)
+def test_booking_link_refuses_a_fragment_that_would_change_the_host(fragment):
+    # `link` comes from the API row. Joined blindly, "@evil.example/…" lands on
+    # https://www.aviasales.ru@evil.example/… — a link to the attacker's host.
+    assert _build_booking_link(fragment, "2") == ""
+
+
+@pytest.mark.parametrize("fragment", [None, "", 0])
+def test_booking_link_without_a_fragment_is_empty_not_an_error(fragment):
+    # `link: null` in one API row must not take the whole response down.
+    assert _build_booking_link(fragment, "2") == ""
+
+
+@pytest.mark.parametrize("origin", ["MOW@EVIL.COM/", "", "MO", "MOWW", "M-W"])
+def test_route_link_refuses_codes_that_are_not_iata(origin):
+    assert _route_booking_link(origin, "BKK", "2026-12-03", "", "1") == ""
+    assert _route_booking_link("BKK", origin, "2026-12-03", "", "1") == ""
+
+
+def test_route_link_from_a_clean_route_stays_on_aviasales():
+    link = _route_booking_link("mow", "BKK", "2026-12-03", "2026-12-10", "21")
+    assert link.startswith("https://www.aviasales.ru/search/MOW0312BKK101221")
+
+
 def test_booking_link_replaces_an_existing_marker():
     # Appending would leave two markers and no way to tell which one is counted.
     link = _build_booking_link("/search/MOW1607IST1?marker=99999&t=SU100", "1")

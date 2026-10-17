@@ -229,3 +229,48 @@ async def test_healthy_or_garbled_quota_headers_stay_quiet(caplog):
         await get(PATH)
 
     assert "quota" not in caplog.text
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_connection_error_text_is_logged_not_returned(caplog):
+    # httpx quotes the offending header in some errors — and one header is the
+    # API token. The model gets the error class, the log gets the text.
+    route = respx.get(f"{API_BASE}{PATH}").mock(
+        side_effect=httpx.LocalProtocolError("Illegal header value b'SECRET-token\\n'")
+    )
+
+    with caplog.at_level(logging.WARNING, logger="aviasales_mcp.api.client"):
+        with pytest.raises(ApiError) as excinfo:
+            await get(PATH)
+
+    assert "SECRET-token" not in str(excinfo.value)
+    assert "LocalProtocolError" in str(excinfo.value)
+    assert "SECRET-token" in caplog.text
+    assert route.call_count == 3
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_upstream_error_text_is_bounded_and_stringified():
+    respx.get(f"{API_BASE}{PATH}").mock(
+        return_value=httpx.Response(
+            200, json={"success": False, "error": {"detail": "x" * 1000}}
+        )
+    )
+
+    with pytest.raises(ApiError) as excinfo:
+        await get(PATH)
+
+    message = str(excinfo.value)
+    assert message.startswith("API error: {")
+    assert len(message) <= len("API error: ") + 300
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_upstream_error_without_text_is_reported():
+    respx.get(f"{API_BASE}{PATH}").mock(return_value=httpx.Response(200, json={"success": False}))
+
+    with pytest.raises(ApiError, match="unknown error"):
+        await get(PATH)

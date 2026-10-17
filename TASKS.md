@@ -41,3 +41,4 @@
 | 12 | PyPI-ready packaging (urls, license-files, py.typed, classifiers), README install + client configs, repo description and topics | 2026-08-21 |
 | 13 | GHCR image + listing in the official MCP registry via GitHub OIDC; README install via Docker for Claude Code, Claude Desktop, Cursor, Windsurf, Zed, Codex | 2026-10-09 |
 | 14 | Tool `Use when` descriptions, per-client README JSON, `.mcpb` bundle and tag workflow | 2026-10-10 |
+| 15 | Security audit after GHSA probe: Host/Origin guard, token leak via httpx error, cwd `.env`, booking-link host, bounded upstream text | 2026-10-17 |
