@@ -321,6 +321,14 @@ async def test_configured_public_host_is_served_and_others_refused():
 
 
 @pytest.mark.asyncio
+async def test_docker_style_service_name_with_underscore_is_served():
+    allowed = ["mcp_service"]
+    assert (await _post({"Host": "mcp_service:8080"}, allowed)).status_code == 200
+    headers = {"Host": "mcp_service:8080", "Origin": "http://mcp_service:8080"}
+    assert (await _post(headers, allowed)).status_code == 200
+
+
+@pytest.mark.asyncio
 async def test_without_host_check_any_origin_is_refused_and_any_host_served():
     # A public bind behind a proxy whose name is unknown: Host passes, but a
     # browser request (the only kind that carries Origin) does not.

@@ -34,7 +34,7 @@ async def _reject(response: Response, scope: Scope, receive: Receive, send: Send
 # `host[:port]` as RFC 7230 allows it: a name or IPv4, or a bracketed IPv6.
 # Matched rather than parsed with urlsplit, which accepts userinfo and other
 # junk ("evil.example@localhost" would come back as "localhost").
-_HOST_PORT = r"(?:(?P<name>[a-z0-9.-]+)|\[(?P<ipv6>[0-9a-f:.]+)\])(?::\d{1,5})?"
+_HOST_PORT = r"(?:(?P<name>[a-z0-9._-]+)|\[(?P<ipv6>[0-9a-f:.]+)\])(?::\d{1,5})?"
 _HOST_RE = re.compile(rf"^{_HOST_PORT}$", re.IGNORECASE)
 # A browser's Origin is exactly scheme://host[:port]; "null" and anything else
 # is not one of ours.
