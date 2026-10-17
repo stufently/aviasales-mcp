@@ -22,8 +22,9 @@ to switch on — the server has nothing else. Every tool carries the MCP annotat
 - **No local storage.** The server writes no files; the token lives wherever your MCP client
   config keeps it. A dotenv file is read only when `AVIASALES_ENV_FILE` names it — never
   `.env` from the working directory, which for a stdio server is whatever project the client
-  has open. The token is also refused at startup if it carries whitespace or non-ASCII
-  characters, because httpx would otherwise quote the whole value in its error message.
+  has open (fastmcp's own `.env` reading is switched off the same way, via `FASTMCP_ENV_FILE`).
+  The token is also refused at startup if it carries whitespace or non-ASCII characters,
+  because httpx would otherwise quote the whole value in its error message.
 - **Booking links** point to `www.aviasales.ru`. If you set `AVIASALES_PARTNER_ID`, it is added
   to those links as the `marker` parameter — that is what the partner ID is for, and it is
   visible to whoever opens the link.

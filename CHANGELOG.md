@@ -22,7 +22,11 @@
   `MCP_PORT`/`MCP_HOST`/`MCP_ALLOW_INSECURE_HTTP` (verified: both took effect).
   A dotenv file is now read only from `AVIASALES_ENV_FILE`. **Migration:** a
   local run that relied on `./.env` needs `AVIASALES_ENV_FILE=.env`;
-  `docker run --env-file .env` is unchanged
+  `docker run --env-file .env` is unchanged. fastmcp reads `.env` for its own
+  `FASTMCP_*` settings too, and a file with
+  `FASTMCP_PORT=${AVIASALES_API_TOKEN}` printed the token in the startup
+  traceback (verified); the package now sets `FASTMCP_ENV_FILE` to nothing
+  unless the user set it
 - **A booking link cannot leave `www.aviasales.ru`.** An API row whose `link`
   did not start with `/` was joined as-is, so `@evil.example/…` became
   `https://www.aviasales.ru@evil.example/…`. Such rows now get no link, and
