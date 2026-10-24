@@ -1,0 +1,53 @@
+# Site config for .github/site/build.py. Everything else comes from README.md.
+name = "Aviasales MCP"
+title = "Aviasales MCP — flight price search for AI agents"
+headline = "MCP server for flight price search via the Aviasales / Travelpayouts Data API"
+description = "Thirteen read-only MCP tools for Claude Code, Claude Desktop and Cursor: fares by route and month, cheapest day, flexible dates, airport lookup."
+lang = "en"
+keywords = ["aviasales mcp", "mcp server", "travelpayouts", "flight prices", "cheap flights", "iata codes", "claude code", "cursor"]
+license = "GPL-3.0-or-later"
+license_url = "https://www.gnu.org/licenses/gpl-3.0.html"
+category = "TravelApplication"
+os = "Linux, macOS, Windows"
+programming_language = "Python"
+eyebrow = "Open source · GPL-3.0 · Python 3.12+"
+download_url = "https://pypi.org/project/aviasales-mcp/"
+same_as = ["https://pypi.org/project/aviasales-mcp/"]
+
+landing_sections = ["Example prompts", "Install"]
+
+pages = []
+docs_dir = ""
+
+features = [
+  "Flight prices: fares by route on a date or across a month, the cheapest day to fly and prices for the days around your dates.",
+  "Budget and inspiration search: cheapest destinations from a city and flights inside a budget, even with no destination.",
+  "Place names resolve to IATA codes: lookup_cities and find_nearest_airports, ranked by great-circle distance with no third-party geocoder.",
+  "All thirteen tools only read: none books, buys, writes or changes anything.",
+  "Booking links carry adults, children, infants and cabin class; every price response has a min/median/max price_summary.",
+  "Runs as a Docker image, from PyPI with uvx, or as a one-click .mcpb for Claude Desktop; optional streamable-HTTP with a bearer token.",
+]
+
+[[faq]]
+q = "How do I install Aviasales MCP?"
+a = "Run the Docker image ghcr.io/stufently/aviasales-mcp:latest with AVIASALES_API_TOKEN in the environment, or without Docker run uvx aviasales-mcp (Python 3.12+). The README has ready configs for Claude Code, Claude Desktop, Cursor, Windsurf, Zed and Codex."
+
+[[faq]]
+q = "Which token do I need?"
+a = "A free Travelpayouts API token from travelpayouts.com/programs/100/tools/api. A wrong or missing token still lets the process start; it surfaces as an error on the first search."
+
+[[faq]]
+q = "Are the prices live?"
+a = "No. The Data API serves a cache of recent searches, not live availability. A fare can be gone by the time the link opens, and an empty result means nobody searched that route recently, not that the route does not exist."
+
+[[faq]]
+q = "Do prices include all passengers and the cabin class?"
+a = "No. Prices are always per adult in economy. Passenger count and cabin class are encoded into each ticket's booking_link, which opens Aviasales with the full party pre-filled and shows the real total."
+
+[[faq]]
+q = "Can it book or buy tickets?"
+a = "No. The server searches and links out; it never holds or buys a ticket. All thirteen tools are read-only."
+
+[[faq]]
+q = "Why does AVIASALES_MARKET matter?"
+a = "The price cache is per market: the same route in the same currency comes back at a different price for ru and us. Unset, the server reads the ru market."

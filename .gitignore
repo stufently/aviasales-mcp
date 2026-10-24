@@ -46,3 +46,4 @@ dist-mcpb/
 # OS
 .DS_Store
 Thumbs.db
+_site/
