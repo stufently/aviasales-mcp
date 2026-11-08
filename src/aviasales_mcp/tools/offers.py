@@ -100,7 +100,10 @@ async def get_special_offers(
         "/aviasales/v3/get_special_offers", origin=origin, destination=destination,
         airline=airline, currency=currency, market=market, locale=locale,
     )
-    rows = resp.get("data", [])
+    if not isinstance(resp, dict):
+        resp = {}
+    raw = resp.get("data")
+    rows = [row for row in raw if isinstance(row, dict)] if isinstance(raw, list) else []
     tickets = [_format_offer(row, block) for row in rows[:max(1, min(limit, 100))]]
     payload: dict[str, Any] = {
         "status": "ok", "currency": resp.get("currency", currency),

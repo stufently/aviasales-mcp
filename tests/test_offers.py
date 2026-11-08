@@ -139,3 +139,13 @@ async def test_special_offers_api_error_has_hint():
     assert result["status"] == "error"
     assert result["hint"]
     assert "price_note" not in result
+
+
+@pytest.mark.parametrize("data", [None, "oops", [None, 1, "row"]])
+@respx.mock
+async def test_special_offers_tolerates_malformed_data(data):
+    respx.get(OFFERS_URL).respond(200, json={"success": True, "currency": "rub", "data": data})
+    result = await get_special_offers("LON")
+    assert result["status"] == "ok"
+    assert result["data"] == []
+    assert result["hint"]

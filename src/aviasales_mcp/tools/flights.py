@@ -456,8 +456,9 @@ async def get_prices_calendar(
     children: Annotated[int, Field(ge=0, le=8)] = 0,
     infants: Annotated[int, Field(ge=0, le=8)] = 0,
     trip_class: Literal["economy", "comfort", "business", "first"] = "economy",
-    min_trip_duration: Annotated[int | None, Field(ge=1, le=365)] = None,
-    max_trip_duration: Annotated[int | None, Field(ge=1, le=365)] = None,
+    # strict: without it pydantic coerces JSON `true` to 1 before the validator runs.
+    min_trip_duration: Annotated[int | None, Field(ge=1, le=365, strict=True)] = None,
+    max_trip_duration: Annotated[int | None, Field(ge=1, le=365, strict=True)] = None,
 ) -> dict:
     """Get grouped calendar prices for a route, one fare per day or per month.
 
@@ -484,7 +485,6 @@ async def get_prices_calendar(
         infants: Number of infants under 2, 0-8 (default 0). Cannot exceed the
             number of adults; the excess is trimmed.
         trip_class: "economy", "comfort", "business" or "first" (default "economy").
-
         min_trip_duration: Minimum trip length in days (1-365), the difference
             between departure and return dates. For a 10-14 day trip, set this
             to 10, departure_at to the month, and leave return_at empty.

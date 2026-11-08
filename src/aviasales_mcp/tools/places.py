@@ -47,7 +47,7 @@ async def find_places(
         returned, truncated and data (place objects with codes and names).
         Empty results and errors include a hint naming the next step.
     """
-    term = term.strip()
+    term = term.strip() if isinstance(term, str) else ""
     if len(term) < 2:
         raise validation.InvalidArgumentError(
             "term must contain at least 2 characters after trimming.",
