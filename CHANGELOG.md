@@ -1,6 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 — 2026-11-08
+
+### Added
+
+- `find_places` — public city, airport and country autocomplete without sending
+  the API token, with localized names and at most 20 results.
+- `get_special_offers` — airline promotions from an explicit origin, with
+  destination/airline filters and booking links for the full passenger party.
+- `min_trip_duration` / `max_trip_duration` on `get_prices_calendar` — filter
+  trip length in days, including trips of 10–14 days within a departure month.
 
 ### Security
 

@@ -150,6 +150,7 @@ async def test_every_tool_is_registered():
         "get_prices_calendar",
         "get_flexible_date_prices",
         "get_latest_prices",
+        "get_special_offers",
         "get_popular_directions",
         "get_city_directions",
         "get_alternative_directions",
@@ -159,6 +160,7 @@ async def test_every_tool_is_registered():
         "lookup_cities",
         "lookup_countries",
         "find_nearest_airports",
+        "find_places",
     }
 
 

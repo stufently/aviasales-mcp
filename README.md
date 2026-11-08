@@ -3,14 +3,14 @@
 <!-- mcp-name: io.github.stufently/aviasales-mcp -->
 
 MCP server for flight price search via Aviasales / Travelpayouts Data API.
-Thirteen read-only tools that let Claude Code, Claude Desktop, Cursor or any
+Fifteen read-only tools that let Claude Code, Claude Desktop, Cursor or any
 other MCP client answer flight-price questions: fares by route and month, the
 cheapest day to fly, flexible dates, budget and inspiration search, plus
 airport/city/airline lookup.
 
 Unlike Google-Flights-scraping MCP servers, place names do not have to be
-guessed into IATA codes by the model: `lookup_cities` and `find_nearest_airports`
-resolve them.
+guessed into IATA codes by the model: `find_places`, `lookup_cities` and
+`find_nearest_airports` resolve them.
 
 ## Example prompts
 
@@ -28,7 +28,7 @@ The same kind of question, with the tools a typical agent reaches for.
 
 | Prompt | Tools it reaches for |
 |--------|----------------------|
-| "How much is a flight from Moscow to Istanbul in March?" | `lookup_cities` → `search_flights` |
+| "How much is a flight from Moscow to Istanbul in March?" | `find_places` → `search_flights` |
 | "What's the cheapest day to fly to Bangkok in September?" | `get_prices_calendar` |
 | "I'm flying Berlin→Lisbon on 12 May, back on the 19th — would shifting a day either way be cheaper?" | `get_flexible_date_prices` |
 | "Where can I fly from St Petersburg for under 30 000 ₽?" | `get_city_directions`, `search_by_price_range` |
@@ -303,14 +303,25 @@ the Travelpayouts rate limit, so there is no separate read-only mode to turn on.
 | `get_prices_calendar` | Prices grouped by day or month — the cheapest day to fly |
 | `get_flexible_date_prices` | Prices for the days around your dates — "would shifting a day be cheaper?" |
 | `get_latest_prices` | Most recently found fares, optionally filtered by route |
+| `get_special_offers` | Airline promotions from a required origin, optionally filtered by destination or airline |
 | `get_popular_directions` | Where travellers reach a destination **from** |
 | `get_city_directions` | Cheapest destinations reachable **from** a city — inspiration search |
 | `get_alternative_directions` | Prices for nearby airports/cities |
 | `search_by_price_range` | Flights inside a budget; omit the destination to search anywhere (no date filter — the endpoint ignores one) |
 
-`search_flights`, `get_prices_calendar`, `get_flexible_date_prices` and
-`get_latest_prices` accept `adults` (1–9), `children` (0–8), `infants` (0–8) and
-`trip_class` (`economy`/`comfort`/`business`/`first`).
+`search_flights`, `get_prices_calendar`, `get_flexible_date_prices`,
+`get_latest_prices` and `get_special_offers` accept `adults` (1–9), `children`
+(0–8), `infants` (0–8) and `trip_class` (`economy`/`comfort`/`business`/`first`).
+
+`get_prices_calendar` accepts `min_trip_duration` and `max_trip_duration` in
+days (1–365, minimum no greater than maximum). For a 10–14 day trip in September,
+set `departure_at="2026-09"`, leave `return_at` empty, and pass
+`min_trip_duration=10, max_trip_duration=14`. Either bound can be omitted;
+the response echoes `trip_duration` only when at least one bound is set.
+
+`get_special_offers` requires an explicit `origin`: otherwise the upstream API
+chooses a city from the server's IP. `airline` accepts a two-character IATA code
+such as `SU` or `S7`; resolve names with `lookup_airlines`.
 
 The Data API serves a cache of recent searches and takes no passenger
 parameters, so the party is encoded into each ticket's `booking_link` instead —
@@ -332,11 +343,19 @@ without a second search.
 
 | Tool | Description |
 |------|-------------|
+| `find_places` | Fast city, airport or country name autocomplete returning codes and localized names |
 | `lookup_airlines` | Airlines by name or IATA code |
 | `lookup_airports` | Airports by name, IATA code, or city code |
 | `lookup_cities` | Cities by name or IATA code — turn a city name into a code |
 | `lookup_countries` | Countries by name or code |
 | `find_nearest_airports` | Airports closest to a place or to lat/lon, by distance |
+
+Start name-to-code searches with `find_places`. It calls the public
+`autocomplete.travelpayouts.com/places2` host without an API token and returns
+at most 20 results in relevance order (`limit` defaults to 10). `types` defaults
+to cities and airports; add `country` to search countries, and use `locale`
+for localized names. For broader dataset searches use `lookup_cities` or
+`lookup_airports`; for distance-based searches use `find_nearest_airports`.
 
 The `lookup_*` tools take `search`, `limit` (default 50, max 500) and `locale`,
 and return `{status, total, returned, truncated, data}`. Always pass `search`:

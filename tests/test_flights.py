@@ -24,6 +24,41 @@ from aviasales_mcp.validation import InvalidArgumentError
 API_BASE = "https://api.travelpayouts.com"
 
 
+@pytest.mark.parametrize("minimum,maximum", [(10, 14), (10, None), (None, 14), (None, None)])
+@respx.mock
+async def test_prices_calendar_trip_duration_params(minimum, maximum):
+    route = respx.get(f"{API_BASE}/aviasales/v3/grouped_prices").respond(
+        200, json={"success": True, "currency": "rub", "data": {}}
+    )
+    result = await get_prices_calendar(
+        "MOW", "BKK", departure_at="2026-09",
+        min_trip_duration=minimum, max_trip_duration=maximum,
+    )
+    assert result["status"] == "ok"
+    params = route.calls.last.request.url.params
+    for name, value in [("min_trip_duration", minimum), ("max_trip_duration", maximum)]:
+        if value is None:
+            assert name not in params
+        else:
+            assert params[name] == str(value)
+    if minimum is not None or maximum is not None:
+        assert result["trip_duration"] == {"min": minimum, "max": maximum}
+    else:
+        assert "trip_duration" not in result
+
+
+@pytest.mark.parametrize("minimum,maximum", [(14, 10), (0, None), (None, 366), (True, None)])
+@respx.mock
+async def test_prices_calendar_trip_duration_rejects_bad_range(minimum, maximum):
+    result = await get_prices_calendar(
+        "MOW", "BKK", min_trip_duration=minimum, max_trip_duration=maximum
+    )
+    assert result["status"] == "error"
+    assert "trip_duration" in result["error"]
+    assert result["hint"]
+    assert len(respx.calls) == 0
+
+
 def _mock_prices_for_dates(**ticket_overrides):
     """Install a respx mock for prices_for_dates returning one ticket."""
     ticket = {

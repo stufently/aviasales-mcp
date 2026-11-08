@@ -191,6 +191,8 @@ async def lookup_airports(
 ) -> dict:
     """Look up airports by name, IATA code, or city code.
 
+    For faster name-to-code autocomplete use `find_places` first.
+
     Use when the user names an airport or a code and needs its city, country,
     or coordinates. For the closest airport to a town that does not share the
     airport's name, use `find_nearest_airports` instead of this tool.
@@ -222,6 +224,8 @@ async def lookup_cities(
     locale: str | None = None,
 ) -> dict:
     """Look up cities by name or IATA code and return the code flight tools expect.
+
+    For faster name-to-code autocomplete use `find_places` first.
 
     Use when the user names a city and a flight search needs its IATA code.
     For an airport code use `lookup_airports`; for the nearest airport to a

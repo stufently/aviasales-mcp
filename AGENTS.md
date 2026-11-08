@@ -18,6 +18,8 @@ src/aviasales_mcp/
   tools/flights.py   price search tools + Aviasales deep-link building
   tools/reference.py airline/airport/city/country lookups, dataset cache,
                      nearest-airport search
+  tools/places.py    public place-name autocomplete, bounded and whitelisted
+  tools/offers.py    airline promotions and special-offer booking links
   py.typed           PEP 561 marker; the package ships inline annotations, and
                      without this file type checkers ignore them downstream
 tests/               respx-mocked; no network, no token needed
@@ -72,6 +74,12 @@ docker run --rm -v "$(pwd)":/app -w /app aviasales-mcp-dev ruff check src/ tests
 ```
 
 ## Gotchas
+
+- Autocomplete lives at `autocomplete.travelpayouts.com/places2`, without a
+  token. Pass repeated `types[]` parameters; bare `types` is silently ignored.
+  `/aviasales/v3/autocomplete` returns 404.
+- Special offers require an explicit `origin`: without it the API chooses the
+  city from the server's IP, not the user's location.
 
 - **Schema violations never reach `guard`.** `Literal`/`Field` bounds are
   enforced by FastMCP from the tool schema, so `trip_class="premium"` over a

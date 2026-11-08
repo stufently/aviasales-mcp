@@ -456,6 +456,8 @@ async def get_prices_calendar(
     children: Annotated[int, Field(ge=0, le=8)] = 0,
     infants: Annotated[int, Field(ge=0, le=8)] = 0,
     trip_class: Literal["economy", "comfort", "business", "first"] = "economy",
+    min_trip_duration: Annotated[int | None, Field(ge=1, le=365)] = None,
+    max_trip_duration: Annotated[int | None, Field(ge=1, le=365)] = None,
 ) -> dict:
     """Get grouped calendar prices for a route, one fare per day or per month.
 
@@ -483,9 +485,15 @@ async def get_prices_calendar(
             number of adults; the excess is trimmed.
         trip_class: "economy", "comfort", "business" or "first" (default "economy").
 
+        min_trip_duration: Minimum trip length in days (1-365), the difference
+            between departure and return dates. For a 10-14 day trip, set this
+            to 10, departure_at to the month, and leave return_at empty.
+        max_trip_duration: Maximum trip length in days (1-365). Set to 14 for
+            the 10-14 day trip above; must be at least min_trip_duration.
+
     Returns:
         Dict with "status", "currency", "price_summary" and "data" — grouped
-        price data keyed by date or month.
+        price data keyed by date or month, plus trip_duration if either bound is set.
     """
     origin = validation.iata_code(origin, "origin")
     destination = validation.iata_code(destination, "destination")
@@ -495,6 +503,9 @@ async def get_prices_calendar(
     market = validation.two_letter_code(market, "market", settings.aviasales_market)
     group_by = validation.one_of(group_by, "group_by", ("departure_at", "month"))
     trip_class = _validate_trip_class(trip_class)
+    min_trip_duration, max_trip_duration = validation.trip_duration_range(
+        min_trip_duration, max_trip_duration
+    )
 
     adults, children, infants = _clamp_party(adults, children, infants)
     block = _passenger_block(adults, children, infants, trip_class)
@@ -508,6 +519,8 @@ async def get_prices_calendar(
         currency=currency,
         market=market,
         group_by=group_by,
+        min_trip_duration=min_trip_duration,
+        max_trip_duration=max_trip_duration,
     )
     raw = resp.get("data", {})
     result = {}
@@ -527,6 +540,8 @@ async def get_prices_calendar(
         "price_summary": _price_summary([v for v in result.values() if isinstance(v, dict)]),
         "data": result,
     }
+    if min_trip_duration is not None or max_trip_duration is not None:
+        payload["trip_duration"] = {"min": min_trip_duration, "max": max_trip_duration}
     if not result:
         payload["hint"] = _NO_RESULTS_HINT
     return payload

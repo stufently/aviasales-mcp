@@ -2,7 +2,7 @@
 name = "Aviasales MCP"
 title = "Aviasales MCP — flight price search for AI agents"
 headline = "MCP server for flight price search via the Aviasales / Travelpayouts Data API"
-description = "Thirteen read-only MCP tools for Claude Code, Claude Desktop and Cursor: fares by route and month, cheapest day, flexible dates, airport lookup."
+description = "Fifteen read-only MCP tools for Claude Code, Claude Desktop and Cursor: fares by route and month, cheapest day, flexible dates, airport lookup."
 lang = "en"
 keywords = ["aviasales mcp", "mcp server", "travelpayouts", "flight prices", "cheap flights", "iata codes", "claude code", "cursor"]
 license = "GPL-3.0-or-later"
@@ -22,8 +22,8 @@ docs_dir = ""
 features = [
   "Flight prices: fares by route on a date or across a month, the cheapest day to fly and prices for the days around your dates.",
   "Budget and inspiration search: cheapest destinations from a city and flights inside a budget, even with no destination.",
-  "Place names resolve to IATA codes: lookup_cities and find_nearest_airports, ranked by great-circle distance with no third-party geocoder.",
-  "All thirteen tools only read: none books, buys, writes or changes anything.",
+  "Place names resolve to IATA codes: find_places autocomplete, lookup_cities and find_nearest_airports, ranked by great-circle distance with no third-party geocoder.",
+  "All fifteen tools only read: none books, buys, writes or changes anything.",
   "Booking links carry adults, children, infants and cabin class; every price response has a min/median/max price_summary.",
   "Runs as a Docker image, from PyPI with uvx, or as a one-click .mcpb for Claude Desktop; optional streamable-HTTP with a bearer token.",
 ]
@@ -46,7 +46,7 @@ a = "No. Prices are always per adult in economy. Passenger count and cabin class
 
 [[faq]]
 q = "Can it book or buy tickets?"
-a = "No. The server searches and links out; it never holds or buys a ticket. All thirteen tools are read-only."
+a = "No. The server searches and links out; it never holds or buys a ticket. All fifteen tools are read-only."
 
 [[faq]]
 q = "Why does AVIASALES_MARKET matter?"

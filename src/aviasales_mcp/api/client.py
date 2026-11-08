@@ -13,6 +13,7 @@ from aviasales_mcp.config import settings
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.travelpayouts.com"
+PLACES_URL = "https://autocomplete.travelpayouts.com/places2"
 TIMEOUT = 30.0
 MAX_RETRIES = 2
 RETRY_BACKOFF = 1.0
@@ -117,12 +118,13 @@ async def _request(
     path: str,
     *,
     params: dict[str, Any] | None = None,
+    url: str | None = None,
+    send_token: bool = True,
 ) -> Any:
-    headers = {
-        "X-Access-Token": settings.aviasales_api_token.get_secret_value(),
-        "Accept-Encoding": "gzip, deflate",
-    }
-    url = f"{BASE_URL}{path}"
+    headers = {"Accept-Encoding": "gzip, deflate"}
+    if send_token:
+        headers["X-Access-Token"] = settings.aviasales_api_token.get_secret_value()
+    url = url if url is not None else f"{BASE_URL}{path}"
 
     for attempt in range(MAX_RETRIES + 1):
         final_attempt = attempt == MAX_RETRIES
@@ -187,3 +189,8 @@ async def _request(
 async def get(path: str, **params: Any) -> Any:
     clean = {k: v for k, v in params.items() if v is not None}
     return await _request("GET", path, params=clean)
+
+
+async def get_places(params: dict[str, Any]) -> Any:
+    """Query public place autocomplete without sending the private API token."""
+    return await _request("GET", "", params=params, url=PLACES_URL, send_token=False)
