@@ -177,6 +177,39 @@ def two_letter_code(value: str | None, field: str, default: str = "") -> str | N
     return text
 
 
+def airline_code(value: str | None, field: str = "airline") -> str | None:
+    """Normalize an optional two-character alphanumeric IATA airline code."""
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9]{2}", value.strip()):
+        raise InvalidArgumentError(
+            f'{field} must be a 2-character IATA airline code (e.g. "SU", "S7").',
+            f"Resolve the airline with lookup_airlines and retry with its 2-character code, "
+            f"or omit {field} to search all airlines.",
+        )
+    return value.strip().upper()
+
+
+def trip_duration_range(
+    min_days: int | None, max_days: int | None
+) -> tuple[int | None, int | None]:
+    """Validate trip length in days, refusing booleans and reversed bounds."""
+    for field, value in (("min_trip_duration", min_days), ("max_trip_duration", max_days)):
+        if value is not None and (type(value) is not int or not 1 <= value <= 365):
+            raise InvalidArgumentError(
+                f"{field} must be an integer from 1 to 365 days, or None.",
+                f"Set {field} to a whole number of days from 1 to 365, or omit it "
+                "when calling get_prices_calendar.",
+            )
+    if min_days is not None and max_days is not None and min_days > max_days:
+        raise InvalidArgumentError(
+            "min_trip_duration must not exceed max_trip_duration.",
+            "Swap min_trip_duration and max_trip_duration so the minimum comes first, "
+            "then call get_prices_calendar again.",
+        )
+    return min_days, max_days
+
+
 def one_of(value: str, field: str, allowed: tuple[str, ...]) -> str:
     """Validate an enum-style argument.
 

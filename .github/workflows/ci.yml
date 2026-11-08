@@ -66,7 +66,7 @@ jobs:
           jq -e 'select(.id == 1) | .result.serverInfo.name == "Aviasales"' smoke.jsonl
           count=$(jq -r 'select(.id == 2) | .result.tools | length' smoke.jsonl)
           echo "tools: $count"
-          [ "$count" = 13 ] || { echo "::error::expected 13 tools, got '$count'"; exit 1; }
+          [ "$count" = 15 ] || { echo "::error::expected 15 tools, got '$count'"; exit 1; }
 
       - name: Build dev image and run the suite inside it
         run: docker build --target dev -t aviasales-mcp-dev .

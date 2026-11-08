@@ -13,12 +13,6 @@
       the "prices are a 48h cache" caveat the whole `price_note` machinery exists
       to apologise for. Pair it with a `search_id` → filter → detail tool split so
       results do not flood the context
-- [ ] `/aviasales/v3/autocomplete?term=&types=city|airport` — server-side place
-      lookup that could replace the 2.5 MB `airports.json` download for the common
-      "city name → IATA" path
-- [ ] `/aviasales/v3/get_special_offers` — airline promo fares (alive, 600/min)
-- [ ] `min_trip_duration` / `max_trip_duration` on `get_prices_calendar` — serves
-      "a 10-14 day trip in September" (verified working live)
 - [ ] Add GraphQL endpoint support (aviasales GraphQL API)
 - [ ] Add hotel search tools (Hotellook API)
 - [ ] Add integration tests against the real API (currently everything is respx-mocked)
@@ -42,3 +36,4 @@
 | 13 | GHCR image + listing in the official MCP registry via GitHub OIDC; README install via Docker for Claude Code, Claude Desktop, Cursor, Windsurf, Zed, Codex | 2026-10-09 |
 | 14 | Tool `Use when` descriptions, per-client README JSON, `.mcpb` bundle and tag workflow | 2026-10-10 |
 | 15 | Security audit after GHSA probe: Host/Origin guard, token leak via httpx error, cwd `.env`, booking-link host, bounded upstream text | 2026-10-17 |
+| 16 | `find_places` (public autocomplete `places2`; the `/aviasales/v3/autocomplete` path in this list was a 404), `get_special_offers`, `min/max_trip_duration` on `get_prices_calendar`; version 0.6.0 | 2026-11-08 |

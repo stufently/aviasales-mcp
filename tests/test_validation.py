@@ -4,6 +4,31 @@ from aviasales_mcp import validation
 from aviasales_mcp.validation import InvalidArgumentError
 
 
+def test_airline_code():
+    for value, expected in [(None, None), ("", None), ("  ", None), ("su", "SU"), (" s7 ", "S7")]:
+        assert validation.airline_code(value) == expected
+    for value in ("S77", "S", "S-", "СУ", 77):
+        with pytest.raises(InvalidArgumentError, match="airline") as exc:
+            validation.airline_code(value)
+        assert "lookup_airlines" in exc.value.hint
+    with pytest.raises(InvalidArgumentError, match="carrier"):
+        validation.airline_code("bad", "carrier")
+
+
+def test_trip_duration_range():
+    for pair in [(None, None), (1, 365), (10, 14), (10, None), (None, 14), (10, 10)]:
+        assert validation.trip_duration_range(*pair) == pair
+    for field, pair in [
+        ("min_trip_duration", (0, None)), ("max_trip_duration", (None, 366)),
+        ("min_trip_duration", (True, None)), ("max_trip_duration", (None, False)),
+        ("min_trip_duration", (1.5, None)), ("max_trip_duration", (None, "14")),
+        ("min_trip_duration", (14, 10)),
+    ]:
+        with pytest.raises(InvalidArgumentError, match=field) as exc:
+            validation.trip_duration_range(*pair)
+        assert exc.value.hint
+
+
 def test_iata_code_is_normalized_to_upper():
     assert validation.iata_code("mow", "origin") == "MOW"
     assert validation.iata_code("  Bkk  ", "origin") == "BKK"

@@ -12,6 +12,18 @@ PATH = "/aviasales/v3/prices_for_dates"
 OK = {"success": True, "currency": "rub", "data": []}
 
 
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_places_retries_5xx_without_token():
+    rows = [{"type": "city", "code": "BKK"}]
+    route = respx.get("https://autocomplete.travelpayouts.com/places2").mock(
+        side_effect=[httpx.Response(500), httpx.Response(200, json=rows)]
+    )
+    assert await client.get_places({"term": "bang", "types[]": ["city"]}) == rows
+    assert route.call_count == 2
+    assert all("X-Access-Token" not in call.request.headers for call in route.calls)
+
+
 @pytest.fixture(autouse=True)
 def _no_backoff_sleep(monkeypatch):
     """Keep the retry tests instant — the delays themselves are not under test."""

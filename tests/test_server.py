@@ -2,6 +2,7 @@ import logging
 import re
 
 import pytest
+import respx
 from pydantic import SecretStr
 
 from aviasales_mcp import server
@@ -150,6 +151,7 @@ async def test_every_tool_is_registered():
         "get_prices_calendar",
         "get_flexible_date_prices",
         "get_latest_prices",
+        "get_special_offers",
         "get_popular_directions",
         "get_city_directions",
         "get_alternative_directions",
@@ -159,6 +161,7 @@ async def test_every_tool_is_registered():
         "lookup_cities",
         "lookup_countries",
         "find_nearest_airports",
+        "find_places",
     }
 
 
@@ -233,3 +236,23 @@ async def test_server_reports_a_version():
     # Clients cache tool definitions and need something to invalidate on.
     assert server.__version__
     assert server.mcp.version == server.__version__
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field", ["min_trip_duration", "max_trip_duration"])
+async def test_trip_duration_rejects_boolean_over_mcp(field):
+    # Pydantic in lax mode turns JSON `true` into 1, which would reach the API
+    # as a one-day bound; the schema must refuse it before the tool runs.
+    from fastmcp import Client
+    from fastmcp.exceptions import ToolError
+
+    with respx.mock(assert_all_called=False) as mock:
+        route = mock.get("https://api.travelpayouts.com/aviasales/v3/grouped_prices").respond(
+            200, json={"success": True, "currency": "rub", "data": {}}
+        )
+        async with Client(server.mcp) as mcp_client:
+            with pytest.raises(ToolError):
+                await mcp_client.call_tool(
+                    "get_prices_calendar", {"origin": "MOW", "destination": "BKK", field: True}
+                )
+        assert route.call_count == 0

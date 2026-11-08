@@ -23,6 +23,8 @@ from aviasales_mcp.tools.flights import (
     search_by_price_range,
     search_flights,
 )
+from aviasales_mcp.tools.offers import get_special_offers
+from aviasales_mcp.tools.places import find_places
 from aviasales_mcp.tools.reference import (
     find_nearest_airports,
     lookup_airlines,
@@ -60,7 +62,8 @@ mcp = FastMCP(
         "Use the tools to search flight prices, find the cheapest dates, "
         "discover where to fly, and look up airline/airport/city codes. "
         "Every flight tool takes IATA codes — resolve a place name with "
-        "lookup_cities or find_nearest_airports first. All price data comes from "
+        "find_places first, then lookup_cities or find_nearest_airports if needed. "
+        "All price data comes from "
         "a cache of recent user searches (last 48h) and is per adult in economy."
     ),
 )
@@ -80,11 +83,13 @@ _TOOLS = (
     get_prices_calendar,
     get_flexible_date_prices,
     get_latest_prices,
+    get_special_offers,
     get_popular_directions,
     get_city_directions,
     get_alternative_directions,
     search_by_price_range,
     # Reference tools
+    find_places,
     lookup_airlines,
     lookup_airports,
     lookup_cities,
