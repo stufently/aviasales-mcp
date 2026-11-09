@@ -49,6 +49,14 @@ async def test_find_places_dedups_types():
 
 
 @respx.mock
+async def test_find_places_empty_types_uses_default():
+    route = respx.get(PLACES_URL).respond(200, json=[{"type": "city", "code": "BKK"}])
+    result = await find_places("bang", types=[])
+    assert route.calls.last.request.url.params.get_list("types[]") == ["city", "airport"]
+    assert result["types"] == ["city", "airport"]
+
+
+@respx.mock
 async def test_find_places_rejects_short_term():
     result = await find_places(" l ")
     assert result["status"] == "error"

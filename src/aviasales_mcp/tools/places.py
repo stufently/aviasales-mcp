@@ -54,7 +54,9 @@ async def find_places(
             "Send at least 2 characters of a city, airport or country name as term; "
             "or use lookup_cities with a known IATA code.",
         )
-    requested_types = ["city", "airport"] if types is None else types
+    # An empty list would send no types[] filter at all, leaving the choice to
+    # upstream's own default rather than the documented city+airport.
+    requested_types = types or ["city", "airport"]
     if any(kind not in ("city", "airport", "country") for kind in requested_types):
         raise validation.InvalidArgumentError(
             "types must contain only city, airport or country.",
